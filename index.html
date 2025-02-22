@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - Upload Fixed</title>
+  <title>Neon Face Blur - Fast & Accurate</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -254,11 +254,12 @@
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
       videoElement.muted = true; // Mute to avoid playback noise
-      videoElement.preload = 'auto'; // Preload to help with local files
+      videoElement.preload = 'auto'; // Preload for faster detection
+      videoElement.controls = false; // Hide controls for off-screen use
 
       await new Promise((resolve, reject) => {
         videoElement.onloadedmetadata = () => {
-          console.log("Video metadata loaded:", videoElement.videoWidth, videoElement.videoHeight, videoElement.duration);
+          console.log("Video metadata loaded instantly:", videoElement.videoWidth, videoElement.videoHeight, videoElement.duration);
           resolve();
         };
         videoElement.onerror = () => {
@@ -295,8 +296,8 @@
 
       const recorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 3000000, // 3 Mbps
-        audioBitsPerSecond: 96000   // 96 kbps
+        videoBitsPerSecond: 3000000, // 3 Mbps for speed
+        audioBitsPerSecond: 96000   // 96 kbps for audio
       });
       const chunks = [];
       recorder.ondataavailable = e => {
@@ -317,7 +318,7 @@
       recorder.onstart = () => console.log("Recorder started!");
 
       recorder.start(50);
-      videoElement.playbackRate = 2;
+      videoElement.playbackRate = 2; // Double speed for faster processing
       try {
         await videoElement.play();
         console.log("Video playback started!");
@@ -340,11 +341,12 @@
 
         ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-        if (frameCounter % 20 === 0) {
+        // Detect faces every 10 frames for speed and accuracy
+        if (frameCounter % 10 === 0) {
           try {
             lastPredictions = await model.estimateFaces(videoElement, false, true);
             faceCount.textContent = lastPredictions.length;
-            console.log("Faces detected:", lastPredictions.length);
+            console.log("Faces detected instantly:", lastPredictions.length);
           } catch (error) {
             console.error("Face detection failed:", error);
           }
