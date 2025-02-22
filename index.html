@@ -253,8 +253,6 @@
       const videoUrl = URL.createObjectURL(videoFile);
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
-      videoElement.muted = true; // Mute to avoid playback noise
-      videoElement.preload = 'auto'; // Preload to help with local files
 
       await new Promise((resolve, reject) => {
         videoElement.onloadedmetadata = () => {
@@ -263,19 +261,14 @@
         };
         videoElement.onerror = () => {
           console.error("Error loading video metadata");
-          reject(new Error("Failed to load video metadata"));
+          reject();
         };
-      }).catch(error => {
-        console.error("Metadata loading error:", error);
-        alert("Failed to load video. Please ensure it’s a valid video file and try again.");
-        loader.style.display = 'none';
-        return;
       });
 
       const targetWidth = videoElement.videoWidth;
       const targetHeight = videoElement.videoHeight;
       const duration = videoElement.duration;
-      const frameRate = 30; // Default, as exact FPS isn’t easily accessible
+      const frameRate = 30;
       outputCanvas.width = targetWidth;
       outputCanvas.height = targetHeight;
 
@@ -323,7 +316,7 @@
         console.log("Video playback started!");
       } catch (error) {
         console.error("Playback failed:", error);
-        alert("Failed to play video. Please try again or use a web server.");
+        alert("Failed to play video. Please try again.");
         recorder.stop();
         return;
       }
@@ -395,7 +388,7 @@
         downloadBtn.disabled = false;
       } catch (error) {
         console.error("Download failed:", error);
-        alert("Download failed. Please try again or use a web server.");
+        alert("Download failed. Please try again.");
         downloadBtn.disabled = false;
       }
     }
