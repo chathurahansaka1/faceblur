@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CH Face Blur</title>
+    <title>CH Face Blur with Audio</title>
     <style>
-        /* Modern Cyberpunk Style */
+        /* Modern Neon UI */
         :root {
             --neon-blue: #00f3ff;
             --neon-pink: #ff00ff;
@@ -97,6 +97,21 @@
             background: #555;
         }
 
+        .slider-container {
+            margin: 1rem 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--neon-blue);
+        }
+
+        .slider {
+            width: 100%;
+            accent-color: var(--neon-blue);
+        }
+
         .progress-container {
             width: 100%;
             height: 15px;
@@ -138,7 +153,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>CH FACE BLUR</h1>
+        <h1>CH FACE BLUR WITH AUDIO</h1>
         
         <div class="video-container">
             <video id="inputVideo" controls></video>
@@ -158,6 +173,11 @@
             </button>
         </div>
 
+        <div class="slider-container">
+            <label for="blurIntensity">Blur Intensity: <span id="blurValue">15</span>px</label>
+            <input type="range" id="blurIntensity" class="slider" min="5" max="50" value="15">
+        </div>
+
         <div class="progress-container">
             <div class="progress-bar"></div>
         </div>
@@ -175,11 +195,20 @@
         const downloadBtn = document.getElementById('downloadBtn');
         const statusEl = document.getElementById('status');
         const progressBar = document.querySelector('.progress-bar');
+        const blurIntensity = document.getElementById('blurIntensity');
+        const blurValue = document.getElementById('blurValue');
 
         let model;
         let mediaRecorder;
         let chunks = [];
         let isProcessing = false;
+        let currentBlur = 15;
+
+        // Update blur intensity
+        blurIntensity.addEventListener('input', () => {
+            currentBlur = blurIntensity.value;
+            blurValue.textContent = currentBlur;
+        });
 
         // 1. Model Loading with Error Handling
         async function initializeApp() {
@@ -215,8 +244,13 @@
                 outputCanvas.height = inputVideo.videoHeight;
                 const ctx = outputCanvas.getContext('2d');
                 
-                // Initialize MediaRecorder
+                // Initialize MediaRecorder with Audio
                 const stream = outputCanvas.captureStream(30);
+                const audioStream = inputVideo.captureStream().getAudioTracks();
+                if (audioStream.length > 0) {
+                    stream.addTrack(audioStream[0]);
+                }
+
                 mediaRecorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm; codecs=vp9',
                     videoBitsPerSecond: 5000000
@@ -263,7 +297,7 @@
                             ctx.beginPath();
                             ctx.rect(x, y, width, height);
                             ctx.clip();
-                            ctx.filter = 'blur(15px)';
+                            ctx.filter = `blur(${currentBlur}px)`;
                             ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
                             ctx.restore();
                         });
