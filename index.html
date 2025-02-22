@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - High Quality</title>
+  <title>Neon Face Blur - Optimized</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -252,17 +252,43 @@
       outputCanvas.height = targetHeight;
 
       const ctx = outputCanvas.getContext('2d', { alpha: false });
-      const frameRate = 60; // Target frame rate
+      const frameRate = 30; // Reduced to 30 FPS for faster processing
       const duration = videoElement.duration;
-      const totalFrames = Math.floor(duration * frameRate);
-      const frames = [];
+      const frameInterval = 1 / frameRate; // Process every 1/30th second
+      const totalFrames = Math.floor(duration / frameInterval);
+      let frameCount = 0;
 
-      // Process all frames
+      const stream = outputCanvas.captureStream(frameRate);
+      const audioTracks = videoElement.captureStream().getAudioTracks();
+      if (audioTracks.length > 0) {
+        audioTracks.forEach(track => stream.addTrack(track));
+      }
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 10000000, // 10 Mbps for balance of quality and speed
+        audioBitsPerSecond: 128000
+      });
+      const chunks = [];
+      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.onstop = () => finalizeDownload(new Blob(chunks, { type: 'video/webm' }));
+      recorder.onerror = () => alert("Recording failed. Please try again.");
+
+      recorder.start(100);
       processing = true;
-      for (let i = 0; i < totalFrames && processing; i++) {
-        const time = i / frameRate;
-        videoElement.currentTime = time;
 
+      // Process frames with optimization
+      (async function processFrame() {
+        if (!processing) return;
+
+        const currentTime = frameCount * frameInterval;
+        if (currentTime >= duration) {
+          recorder.stop();
+          loader.style.display = 'none';
+          return;
+        }
+
+        videoElement.currentTime = currentTime;
         await new Promise(resolve => {
           videoElement.onseeked = () => resolve();
           videoElement.onerror = () => resolve();
@@ -293,106 +319,32 @@
           ctx.restore();
         });
 
-        const frame = ctx.getImageData(0, 0, targetWidth, targetHeight);
-        frames.push(frame);
-
-        const progressPercent = (i / (totalFrames - 1)) * 100;
+        frameCount++;
+        const progressPercent = Math.min((currentTime / duration) * 100, 100);
         progress.textContent = `${progressPercent.toFixed(1)}%`;
         progressBar.style.width = `${progressPercent}%`;
-      }
 
-      if (!processing) return;
-
-      // Encode video with WebCodecs if available
-      if ('VideoEncoder' in window) {
-        await encodeVideoWithWebCodecs(frames, videoElement, frameRate, targetWidth, targetHeight);
-      } else {
-        await encodeVideoWithMediaRecorder(frames, videoElement, frameRate, targetWidth, targetHeight);
-      }
-
-      loader.style.display = 'none';
+        requestAnimationFrame(processFrame);
+      })();
     });
-
-    // WebCodecs encoding (high quality)
-    async function encodeVideoWithWebCodecs(frames, videoElement, frameRate, width, height) {
-      const encoder = new VideoEncoder({
-        output: chunk => {
-          const blob = new Blob([chunk], { type: 'video/mp4' });
-          finalizeDownload(blob);
-        },
-        error: e => console.error('Encoding error:', e)
-      });
-
-      const config = {
-        codec: 'avc1.640032', // H.264 high profile
-        width: width,
-        height: height,
-        bitrate: 20000000, // 20 Mbps
-        framerate: frameRate,
-        latencyMode: 'quality'
-      };
-      encoder.configure(config);
-
-      frames.forEach((frameData, index) => {
-        const frame = new VideoFrame(frameData.data, {
-          format: 'RGBA',
-          codedWidth: width,
-          codedHeight: height,
-          timestamp: (index / frameRate) * 1000000 // Microseconds
-        });
-        encoder.encode(frame);
-        frame.close();
-      });
-
-      await encoder.flush();
-
-      // Add audio (simplified muxing with original audio blob)
-      const audioBlob = await fetch(videoElement.src).then(res => res.blob());
-      const videoBlob = await new Promise(resolve => {
-        encoder.output = chunk => resolve(new Blob([chunk], { type: 'video/mp4' }));
-      });
-      const combinedBlob = new Blob([videoBlob, audioBlob], { type: 'video/mp4' });
-      finalizeDownload(combinedBlob);
-    }
-
-    // Fallback to MediaRecorder
-    async function encodeVideoWithMediaRecorder(frames, videoElement, frameRate, width, height) {
-      const stream = outputCanvas.captureStream(frameRate);
-      const audioTracks = videoElement.captureStream().getAudioTracks();
-      if (audioTracks.length > 0) {
-        audioTracks.forEach(track => stream.addTrack(track));
-      }
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 20000000,
-        audioBitsPerSecond: 128000
-      });
-      const chunks = [];
-
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => finalizeDownload(new Blob(chunks, { type: 'video/webm' }));
-
-      recorder.start();
-      const ctx = outputCanvas.getContext('2d');
-      for (let i = 0; i < frames.length; i++) {
-        ctx.putImageData(frames[i], 0, 0);
-        await new Promise(resolve => setTimeout(resolve, 1000 / frameRate));
-      }
-      recorder.stop();
-    }
 
     // Download handler
     function finalizeDownload(blob) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `blurred-video-${Date.now()}_4K.${blob.type.split('/')[1]}`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      downloadBtn.disabled = false;
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `blurred-video-${Date.now()}_4K.webm`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        downloadBtn.disabled = false;
+      } catch (error) {
+        console.error("Download failed:", error);
+        alert("Download failed. Please try again or use a different browser.");
+        downloadBtn.disabled = false;
+      }
     }
 
     downloadBtn.addEventListener('click', () => {
