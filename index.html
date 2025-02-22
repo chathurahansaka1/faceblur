@@ -6,6 +6,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
+        /* CSS styles for the application */
         :root {
             --primary-green: #10e956;
             --secondary-green: #05c541;
@@ -313,15 +314,6 @@
                     // Simulate face detection
                     const prediction = await blazefaceModel.estimateFaces(videoElement);
                     detectedFaces += prediction.length;
-
-                    // Apply blur effect to detected faces
-                    prediction.forEach(face => {
-                        const { topLeft, bottomRight } = face;
-                        const width = bottomRight[0] - topLeft[0];
-                        const height = bottomRight[1] - topLeft[1];
-                        ctx.filter = `blur(${currentBlurIntensity}px)`;
-                        ctx.drawImage(videoElement, 0, 0, videoElement.videoWidth, videoElement.videoHeight);
-                    });
 
                     if (progress >= 100) {
                         clearInterval(interval);
