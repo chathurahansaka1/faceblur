@@ -35,83 +35,115 @@
         let model;
         let mediaRecorder;
         let recordedChunks = [];
+        let isProcessing = false;
 
-        // Blazeface මාදිලිය පූරණය කිරීම
+        // මාදිලිය පූරණය කිරීමේ දෝෂ අසාර්ථකත්වය හැසිරවීම
         async function loadModel() {
-            model = await blazeface.load();
-            console.log("Model loaded!");
+            try {
+                model = await blazeface.load();
+                console.log("Model loaded successfully!");
+            } catch (error) {
+                console.error("Model loading failed:", error);
+                alert("මාදිලිය පූරණය කිරීම අසාර්ථක විය. අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.");
+            }
         }
         loadModel();
 
-        // වීඩියෝ තෝරාගැනීම
-        videoInput.addEventListener('change', (e) => {
+        // වීඩියෝ ප්‍රමාණය සහ ධාරාව සකස් කිරීම
+        videoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
-            inputVideo.src = URL.createObjectURL(file);
-        });
-
-        // ප්‍රොසෙසින් ආරම්භ කිරීම
-        processBtn.addEventListener('click', async () => {
-            const ctx = outputCanvas.getContext('2d');
+            const url = URL.createObjectURL(file);
             
-            // Canvas සකස් කිරීම
-            outputCanvas.width = inputVideo.videoWidth;
-            outputCanvas.height = inputVideo.videoHeight;
-
-            // MediaRecorder සකස් කිරීම (MP4 ආකෘතියෙන්)
-            const stream = outputCanvas.captureStream(30);
-            mediaRecorder = new MediaRecorder(stream, { 
-                mimeType: 'video/mp4; codecs=avc1' 
+            await new Promise((resolve) => {
+                inputVideo.onloadedmetadata = () => {
+                    outputCanvas.width = inputVideo.videoWidth;
+                    outputCanvas.height = inputVideo.videoHeight;
+                    resolve();
+                };
+                inputVideo.src = url;
             });
-
-            mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
-                downloadLink.href = URL.createObjectURL(blob);
-                downloadLink.hidden = false;
-            };
-            mediaRecorder.start();
-
-            // රියල් ටයිම් ප්‍රොසෙසින්
-            inputVideo.addEventListener('play', async () => {
-                while (!inputVideo.paused && !inputVideo.ended) {
-                    await processFrame();
-                    await new Promise(resolve => requestAnimationFrame(resolve));
-                }
-                mediaRecorder.stop();
-            });
-
-            inputVideo.play();
         });
 
-        // එක් රාමුවක් සැකසීම
+        // ප්‍රක්‍රියාකාරක ලූපය
+        async function processingLoop() {
+            if (!isProcessing || inputVideo.paused || inputVideo.ended) {
+                mediaRecorder?.stop();
+                return;
+            }
+
+            await processFrame();
+            requestAnimationFrame(processingLoop);
+        }
+
+        // රාමුව සැකසීම
         async function processFrame() {
             const ctx = outputCanvas.getContext('2d');
             
-            // වීඩියෝ රාමුව Canvas එකට අඳින්න
             ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
             
-            // මුහුණු හඳුනාගැනීම
-            const predictions = await model.estimateFaces(outputCanvas, false);
-            
-            // එක් එක් මුහුණු අන්තර්ගත කිරීම
-            predictions.forEach(prediction => {
-                const [x, y, width, height] = [
-                    prediction.topLeft[0],
-                    prediction.topLeft[1],
-                    prediction.bottomRight[0] - prediction.topLeft[0],
-                    prediction.bottomRight[1] - prediction.topLeft[1]
-                ];
+            try {
+                const predictions = await model.estimateFaces(inputVideo, false);
                 
-                // බ්ලර් කිරීම
-                ctx.save();
-                ctx.beginPath();
-                ctx.rect(x, y, width, height);
-                ctx.clip();
-                ctx.filter = 'blur(15px)';
-                ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
-                ctx.restore();
-            });
+                predictions.forEach(prediction => {
+                    const start = prediction.topLeft;
+                    const end = prediction.bottomRight;
+                    const width = end[0] - start[0];
+                    const height = end[1] - start[1];
+
+                    // බ්ලර් කිරීමේ කොටස
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(start[0], start[1], width, height);
+                    ctx.clip();
+                    ctx.filter = 'blur(20px)';
+                    ctx.drawImage(outputCanvas, start[0], start[1], width, height, start[0], start[1], width, height);
+                    ctx.restore();
+                });
+            } catch (error) {
+                console.error("Face detection error:", error);
+            }
         }
+
+        // ප්‍රොසෙසින් ආරම්භ කිරීම
+        processBtn.addEventListener('click', async () => {
+            if (!model) {
+                alert("මාදිලිය තවම පූරණය වී නැත!");
+                return;
+            }
+
+            isProcessing = true;
+            recordedChunks = [];
+            
+            // MediaRecorder සකස් කිරීම
+            const stream = outputCanvas.captureStream(25);
+            mediaRecorder = new MediaRecorder(stream, { 
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 2500000 
+            });
+
+            mediaRecorder.ondataavailable = (e) => e.data.size > 0 && recordedChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                // WebM එක MP4 බවට පරිවර්තනය
+                const ffmpeg = new FFmpeg();
+                // FFmpeg.wasm භාවිතා කර පරිවර්තනය කිරීම අවශ්ය
+                // (මෙම කොටස අමතර ක්රියාවලියක් අවශ්ය)
+                
+                downloadLink.href = url;
+                downloadLink.download = `blurred-video-${Date.now()}.webm`;
+                downloadLink.hidden = false;
+            };
+
+            mediaRecorder.start(100);
+            inputVideo.play();
+            processingLoop();
+        });
+
+        // පause තත්ත්වය හසුරුවීම
+        inputVideo.addEventListener('pause', () => isProcessing = false);
+        inputVideo.addEventListener('ended', () => isProcessing = false);
     </script>
 </body>
 </html>
