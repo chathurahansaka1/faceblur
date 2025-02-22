@@ -314,6 +314,15 @@
                     const prediction = await blazefaceModel.estimateFaces(videoElement);
                     detectedFaces += prediction.length;
 
+                    // Apply blur effect to detected faces
+                    prediction.forEach(face => {
+                        const { topLeft, bottomRight } = face;
+                        const width = bottomRight[0] - topLeft[0];
+                        const height = bottomRight[1] - topLeft[1];
+                        ctx.filter = `blur(${currentBlurIntensity}px)`;
+                        ctx.drawImage(videoElement, 0, 0, videoElement.videoWidth, videoElement.videoHeight);
+                    });
+
                     if (progress >= 100) {
                         clearInterval(interval);
                         resolve();
