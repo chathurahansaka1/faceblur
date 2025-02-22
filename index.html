@@ -1,83 +1,260 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast HD Face Blur</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background: #1a1a1a;
-            color: white;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-        }
-        .status {
-            color: #00ff87;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-        .controls {
-            margin: 20px 0;
-            padding: 20px;
-            background: #2a2a2a;
-            border-radius: 8px;
-        }
-        button, .file-upload {
-            background: #00ff87;
-            color: black;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:disabled {
-            background: #666;
-            cursor: not-allowed;
-        }
-        video {
-            max-width: 100%;
-            margin: 20px 0;
-            border-radius: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FaceGuard AI Anonymizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+  <style>
+    :root {
+      --primary: #2bff6c;
+      --secondary: #0a1f12;
+      --background: #041a0a;
+      --text: #e0ffe6;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, var(--background), #000);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      color: var(--text);
+    }
+
+    .container {
+      background: rgba(16, 233, 86, 0.05);
+      border: 2px solid var(--primary);
+      border-radius: 15px;
+      padding: 2rem;
+      width: 95%;
+      max-width: 600px;
+      box-shadow: 0 0 30px rgba(43, 255, 108, 0.2);
+    }
+
+    .upload-section {
+      border: 2px dashed var(--primary);
+      padding: 2rem;
+      text-align: center;
+      border-radius: 10px;
+      margin-bottom: 1.5rem;
+      transition: all 0.3s;
+    }
+
+    .upload-section:hover {
+      background: rgba(43, 255, 108, 0.05);
+    }
+
+    #videoInput {
+      display: none;
+    }
+
+    .custom-upload-btn {
+      background: var(--primary);
+      color: var(--secondary);
+      padding: 12px 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.3s;
+      display: inline-block;
+      margin-top: 1rem;
+    }
+
+    .processing-info {
+      margin-top: 1.5rem;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 10px;
+      background: rgba(43, 255, 108, 0.2);
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+
+    .progress {
+      height: 100%;
+      background: var(--primary);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    #outputCanvas {
+      display: none;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 1rem;
+      }
+      .custom-upload-btn {
+        padding: 10px 20px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Fast HD Face Blur</h1>
-        <div class="status" id="status">Ready to process</div>
-        <input type="file" id="videoInput" accept="video/*">
-        <button id="processBtn" disabled>Process Video</button>
-        <video id="videoPreview" controls></video>
-    </div><script>
-    let model;
-    const status = document.getElementById('status');
+  <div class="container">
+    <div class="upload-section">
+      <h2>වීඩියෝ ගොනුව තෝරන්න</h2>
+      <label class="custom-upload-btn" for="videoInput">
+        උඩුගත කරන්න
+      </label>
+      <input type="file" id="videoInput" accept="video/*">
+      <p style="margin-top: 1rem; font-size: 0.9rem;">
+        උපරිම ප්රමාණය: 100MB | සහයෝගී ආකෘති: MP4, MOV, AVI
+      </p>
+    </div>
+
+    <div class="processing-info">
+      <div class="progress-bar">
+        <div class="progress" id="progressBar"></div>
+      </div>
+      <div class="stats">
+        <div>ප්රගතිය: <span id="progress">0%</span></div>
+        <div>හඳුනාගත් මුහුණු: <span id="faceCount">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="outputCanvas"></canvas>
+
+  <script>
     const videoInput = document.getElementById('videoInput');
-    const processBtn = document.getElementById('processBtn');
-    const videoPreview = document.getElementById('videoPreview');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progress');
+    const faceCount = document.getElementById('faceCount');
+    const processingInfo = document.querySelector('.processing-info');
 
-    async function loadModel() {
-        status.textContent = 'Loading model...';
+    let model;
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    // AI ආකෘතිය පූරණය කිරීම
+    async function initializeModel() {
+      try {
         model = await blazeface.load();
-        status.textContent = 'Model loaded - Ready to process';
+        console.log('AI ආකෘතිය සාර්ථකව පූරණය විය!');
+      } catch (error) {
+        console.error('ආකෘති පූරණයේ දෝෂය:', error);
+        alert('AI ආකෘතිය පූරණය කිරීමට නොහැකි විය. පිටුව නැවුම් කරන්න.');
+      }
     }
-    loadModel();
 
-    videoInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const url = URL.createObjectURL(file);
-            videoPreview.src = url;
-            processBtn.disabled = false;
+    // වීඩියෝ සැකසුම් ක්රියාවලිය
+    async function processVideo(videoFile) {
+      const videoUrl = URL.createObjectURL(videoFile);
+      const videoElement = document.createElement('video');
+      videoElement.src = videoUrl;
+      
+      await new Promise((resolve) => {
+        videoElement.onloadedmetadata = resolve;
+      });
+
+      const canvas = document.getElementById('outputCanvas');
+      canvas.width = videoElement.videoWidth;
+      canvas.height = videoElement.videoHeight;
+      const ctx = canvas.getContext('2d');
+
+      // MediaRecorder සැකසුම
+      const stream = canvas.captureStream(25);
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm; codecs=vp9'
+      });
+
+      mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+      mediaRecorder.start();
+
+      // ප්රධාන සැකසුම් ලූපය
+      videoElement.play();
+      let lastTime = 0;
+
+      async function processFrame() {
+        const currentTime = videoElement.currentTime;
+        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+
+        // මුහුණු හඳුනාගැනීම
+        const predictions = await model.estimateFaces(videoElement);
+        faceCount.textContent = predictions.length;
+
+        predictions.forEach((prediction) => {
+          const [x, y, width, height] = [
+            prediction.topLeft[0],
+            prediction.topLeft[1], 
+            prediction.bottomRight[0] - prediction.topLeft[0],
+            prediction.bottomRight[1] - prediction.topLeft[1]
+          ];
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, width, height);
+          ctx.clip();
+          ctx.filter = 'blur(15px)';
+          ctx.drawImage(canvas, x, y, width, height, x, y, width, height);
+          ctx.restore();
+        });
+
+        // ප්රගතිය යාවත්කාලීන කිරීම
+        const progress = (currentTime / videoElement.duration) * 100;
+        progressBar.style.width = `${progress}%`;
+        progressText.textContent = `${progress.toFixed(1)}%`;
+
+        if (!videoElement.paused && !videoElement.ended) {
+          requestAnimationFrame(processFrame);
+        } else {
+          mediaRecorder.stop();
         }
-    });
-</script>
+      }
 
+      videoElement.addEventListener('play', processFrame);
+    }
+
+    // Event Listeners
+    videoInput.addEventListener('change', async (e) => {
+      if (!model) {
+        alert('කරුණාකර AI ආකෘතිය පූරණය වන තෙක් රැඳී සිටින්න');
+        return;
+      }
+
+      const file = e.target.files[0];
+      if (!file) return;
+
+      processingInfo.style.display = 'block';
+      await processVideo(file);
+    });
+
+    // ප්රතිඵල බාගත කිරීම
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `anonymized-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // ආරම්භක පිහිටුවීම්
+    initializeModel();
+  </script>
 </body>
 </html>
