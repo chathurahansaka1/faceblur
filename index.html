@@ -13,7 +13,122 @@
             --dark-secondary: #1e1e1e;
             --neon-glow: rgba(0, 255, 135, 0.3);
         }
-        /* ... (පෙර CSS ස්ටයිල් එකම තබාගන්න) ... */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Orbitron', 'Segoe UI', sans-serif;
+            background: var(--dark-bg);
+            color: var(--neon-green);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        .cyber-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .cyber-title {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px var(--neon-glow);
+            letter-spacing: 2px;
+        }
+        .video-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        video, canvas {
+            max-width: 45%;
+            border: 2px solid var(--neon-green);
+            border-radius: 15px;
+            box-shadow: 0 0 15px var(--neon-glow);
+        }
+        .cyber-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .cyber-btn {
+            background: var(--neon-green);
+            color: var(--dark-bg);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .cyber-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px var(--neon-green);
+        }
+        .cyber-file-input {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .cyber-file-input input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .cyber-slider {
+            appearance: none;
+            width: 200px;
+            height: 10px;
+            background: var(--dark-secondary);
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+            border-radius: 5px;
+        }
+        .cyber-slider:hover {
+            opacity: 1;
+        }
+        .cyber-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--neon-green);
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .cyber-stats {
+            background: var(--dark-secondary);
+            padding: 10px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .loader {
+            border: 4px solid var(--dark-secondary);
+            border-top: 4px solid var(--neon-green);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -65,7 +180,7 @@
         let frameTimes = [];
         let processingStartTime;
 
-        // Model load කිරීම
+        // Load Blazeface model
         async function loadModel() {
             loader.style.display = 'block';
             try {
@@ -79,7 +194,7 @@
         }
         loadModel();
 
-        // Video upload කිරීම
+        // Video upload handling
         videoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
@@ -92,19 +207,19 @@
             startProcessing();
         });
 
-        // Blur strength update කිරීම
+        // Blur strength adjustment
         blurStrength.addEventListener('input', () => {
             blurLevel = blurStrength.value;
             blurValue.textContent = blurLevel;
         });
 
-        // Processing ආරම්භ කිරීම
+        // Start processing
         async function startProcessing() {
             statusLabel.textContent = "Processing...";
             downloadBtn.disabled = true;
             processingStartTime = Date.now();
             
-            // Video recording ආරම්භ කිරීම
+            // Start video recording
             const canvasStream = outputCanvas.captureStream(30);
             const audioStream = inputVideo.captureStream().getAudioTracks();
             const combinedStream = new MediaStream([
@@ -169,18 +284,18 @@
             }
         }
 
-        // Processing නැවතිම
+        // Stop processing
         function stopProcessing() {
             mediaRecorder?.stop();
             statusLabel.textContent = `Processed in ${((Date.now() - processingStartTime)/1000).toFixed(1)}s`;
         }
 
-        // Video export කිරීම
+        // Export video
         async function exportVideo() {
             loader.style.display = 'block';
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             
-            // WebM to MP4 conversion (අවශ්ය නම්)
+            // WebM to MP4 conversion (if needed)
             const url = URL.createObjectURL(blob);
             
             downloadBtn.href = url;
@@ -194,7 +309,7 @@
             if (downloadBtn.disabled) e.preventDefault();
         });
 
-        // Video අවසන් වූ විට
+        // Handle video end
         inputVideo.addEventListener('ended', stopProcessing);
     </script>
 </body>
