@@ -1,365 +1,317 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="si">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Neon Face Blur Tool</title>
-  <style>
-    /* Modern Neon Design */
-    :root {
-      --neon-blue: #00ffcc;
-      --neon-pink: #ff00aa;
-      --background: #1a1a1a;
-      --text-color: #ffffff;
-      --glass-bg: rgba(255, 255, 255, 0.1);
-      --glass-border: rgba(255, 255, 255, 0.2);
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Face Blur</title>
+    <style>
+        /* Modern Cyberpunk Style */
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --dark-bg: #0a0a0a;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --text-primary: #ffffff;
+        }
 
-    body {
-      background: var(--background);
-      color: var(--text-color);
-      font-family: 'Arial', sans-serif;
-      text-align: center;
-      margin: 0;
-      padding: 20px;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
+        body {
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow-x: hidden;
+        }
 
-    .container {
-      max-width: 900px;
-      width: 100%;
-      padding: 20px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-    }
+        .container {
+            width: 95%;
+            max-width: 1200px;
+            padding: 2rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.2);
+        }
 
-    h1 {
-      font-size: 2.5em;
-      color: var(--neon-blue);
-      text-shadow: 0 0 10px var(--neon-blue);
-      animation: glow 2s infinite alternate;
-    }
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 15px var(--neon-blue);
+            margin-bottom: 2rem;
+        }
 
-    @keyframes glow {
-      0% { text-shadow: 0 0 10px var(--neon-blue); }
-      50% { text-shadow: 0 0 20px var(--neon-blue), 0 0 30px var(--neon-pink); }
-      100% { text-shadow: 0 0 10px var(--neon-blue); }
-    }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid var(--neon-blue);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 0 20px var(--neon-blue);
+        }
 
-    video, canvas {
-      width: 100%;
-      max-width: 800px;
-      border: 2px solid var(--neon-blue);
-      border-radius: 15px;
-      margin: 20px 0;
-      box-shadow: 0 0 15px var(--neon-blue);
-    }
+        #inputVideo, #outputCanvas {
+            width: 100%;
+            display: block;
+        }
 
-    .controls {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      margin: 20px 0;
-      flex-wrap: wrap;
-    }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
 
-    .btn {
-      background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
-      color: var(--text-color);
-      padding: 12px 25px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 1em;
-      font-weight: bold;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 10px var(--neon-blue);
-    }
+        .btn {
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
 
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 15px var(--neon-blue);
+        }
 
-    .btn:not(:disabled):hover {
-      transform: translateY(-3px);
-      box-shadow: 0 0 20px var(--neon-pink);
-    }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: #555;
+        }
 
-    .btn:not(:disabled):active {
-      transform: translateY(1px);
-    }
+        .progress-container {
+            width: 100%;
+            height: 15px;
+            background: rgba(0, 243, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
 
-    .quality-selector {
-      background: var(--glass-bg);
-      padding: 15px;
-      border-radius: 10px;
-      margin: 20px 0;
-      border: 1px solid var(--glass-border);
-    }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink));
+            transition: width 0.3s ease;
+        }
 
-    .quality-selector label {
-      font-size: 1em;
-      color: var(--neon-blue);
-    }
+        .status {
+            text-align: center;
+            color: var(--neon-blue);
+            margin: 1rem 0;
+            min-height: 24px;
+        }
 
-    .quality-selector select {
-      background: var(--background);
-      color: var(--text-color);
-      padding: 8px 15px;
-      border: 1px solid var(--neon-blue);
-      border-radius: 5px;
-      margin-left: 10px;
-      cursor: pointer;
-    }
+        .loading {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid var(--neon-blue);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
 
-    .progress-container {
-      width: 100%;
-      height: 15px;
-      background: var(--glass-bg);
-      border-radius: 10px;
-      margin: 20px 0;
-      overflow: hidden;
-      display: none;
-    }
-
-    .progress-bar {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink));
-      transition: width 0.3s ease;
-    }
-
-    .status {
-      color: var(--neon-blue);
-      margin: 10px 0;
-      font-weight: bold;
-      min-height: 20px;
-    }
-
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid transparent;
-      border-top: 4px solid var(--neon-blue);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 20px auto;
-      display: none;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Neon Face Blur Tool</h1>
-    
-    <input type="file" id="videoInput" accept="video/*" hidden>
-    
-    <div class="quality-selector">
-      <label for="quality">Export Quality:</label>
-      <select id="quality">
-        <option value="high">High Quality (25 Mbps)</option>
-        <option value="ultra">Ultra Quality (50 Mbps)</option>
-        <option value="max">Maximum Quality (100 Mbps)</option>
-      </select>
+    <div class="container">
+        <h1>NEON FACE BLUR</h1>
+        
+        <div class="video-container">
+            <video id="inputVideo" controls></video>
+            <canvas id="outputCanvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <input type="file" id="videoInput" accept="video/*" hidden>
+            <button class="btn" onclick="document.getElementById('videoInput').click()">
+                📁 Upload Video
+            </button>
+            <button class="btn" id="processBtn" disabled>
+                ⚡ Process Video
+            </button>
+            <button class="btn" id="downloadBtn" disabled>
+                💾 Download
+            </button>
+        </div>
+
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
+
+        <div class="status" id="status"></div>
     </div>
 
-    <div class="controls">
-      <button class="btn" onclick="document.getElementById('videoInput').click()">
-        📁 Upload Video
-      </button>
-      <button class="btn" id="processBtn" disabled>
-        ⚡ Process Video
-      </button>
-      <button class="btn" id="downloadBtn" disabled>
-        💾 Download
-      </button>
-    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const inputVideo = document.getElementById('inputVideo');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const processBtn = document.getElementById('processBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const statusEl = document.getElementById('status');
+        const progressBar = document.querySelector('.progress-bar');
 
-    <div class="status"></div>
-    
-    <div class="progress-container">
-      <div class="progress-bar"></div>
-    </div>
+        let model;
+        let mediaRecorder;
+        let chunks = [];
+        let isProcessing = false;
 
-    <div class="spinner"></div>
-    
-    <video id="inputVideo" controls></video>
-    <canvas id="outputCanvas"></canvas>
-  </div>
+        // 1. Model Loading with Error Handling
+        async function initializeApp() {
+            try {
+                statusEl.innerHTML = `<div class="loading"></div> Loading AI Model...`;
+                
+                // Initialize TensorFlow.js
+                await tf.setBackend('webgl');
+                await tf.ready();
+                
+                // Load Blazeface Model
+                model = await blazeface.load({
+                    maxFaces: 10,
+                    detectionConfidence: 0.8
+                });
+                
+                statusEl.textContent = "Ready to process videos!";
+                processBtn.disabled = false;
+            } catch (error) {
+                statusEl.innerHTML = `❌ Error: ${error.message}<br>Please refresh the page or check your internet connection.`;
+                console.error("Initialization error:", error);
+            }
+        }
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
-<script>
-const videoInput = document.getElementById('videoInput');
-const inputVideo = document.getElementById('inputVideo');
-const outputCanvas = document.getElementById('outputCanvas');
-const processBtn = document.getElementById('processBtn');
-const downloadBtn = document.getElementById('downloadBtn');
-const qualitySelect = document.getElementById('quality');
-const progressContainer = document.querySelector('.progress-container');
-const progressBar = document.querySelector('.progress-bar');
-const spinner = document.querySelector('.spinner');
-const status = document.querySelector('.status');
+        // 2. Video Processing Core
+        async function processVideo() {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            try {
+                // Setup Canvas
+                outputCanvas.width = inputVideo.videoWidth;
+                outputCanvas.height = inputVideo.videoHeight;
+                const ctx = outputCanvas.getContext('2d');
+                
+                // Initialize MediaRecorder
+                const stream = outputCanvas.captureStream(30);
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm; codecs=vp9',
+                    videoBitsPerSecond: 5000000
+                });
 
-let model;
-let ctx;
-let mediaRecorder;
-let chunks = [];
-let isProcessing = false;
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = saveVideo;
+                mediaRecorder.start();
 
-// Quality settings map
-const qualitySettings = {
-  high: 25000000,    // 25 Mbps
-  ultra: 50000000,   // 50 Mbps
-  max: 100000000     // 100 Mbps
-};
+                // Frame Processing
+                let lastTime = 0;
+                const totalFrames = Math.floor(inputVideo.duration * 30);
+                let processedFrames = 0;
 
-// Status update helper
-const setStatus = (message, isError = false) => {
-  status.textContent = message;
-  status.style.color = isError ? '#ff0000' : '#00ffcc';
-};
+                function processFrame(timestamp) {
+                    if (!isProcessing) return;
 
-// Load TensorFlow.js and Blazeface model
-async function loadModel() {
-  try {
-    setStatus('Loading TensorFlow.js backend...');
-    await tf.setBackend('webgl');
-    setStatus('Loading face detection model...');
-    model = await blazeface.load();
-    setStatus('Model loaded! Ready to process video.');
-    processBtn.disabled = false;
-  } catch (error) {
-    setStatus('Failed to load model. Please check your internet connection.', true);
-    console.error('Model load error:', error);
-  }
-}
+                    const progress = (processedFrames / totalFrames) * 100;
+                    progressBar.style.width = `${progress}%`;
+                    statusEl.textContent = `Processing: ${progress.toFixed(1)}%`;
 
-// Process video frames
-async function processVideo() {
-  if (isProcessing) return;
-  isProcessing = true;
-  
-  try {
-    setStatus('Processing video...');
-    processBtn.classList.add('processing');
-    spinner.style.display = 'block';
-    progressContainer.style.display = 'block';
-    downloadBtn.disabled = true;
+                    if (processedFrames >= totalFrames) {
+                        mediaRecorder.stop();
+                        isProcessing = false;
+                        downloadBtn.disabled = false;
+                        statusEl.textContent = "Processing complete! ✅";
+                        return;
+                    }
 
-    // Set canvas dimensions to match video
-    outputCanvas.width = inputVideo.videoWidth;
-    outputCanvas.height = inputVideo.videoHeight;
-    ctx = outputCanvas.getContext('2d');
+                    ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                    
+                    // Face Detection
+                    model.estimateFaces(inputVideo).then(predictions => {
+                        predictions.forEach(prediction => {
+                            const [x, y, width, height] = [
+                                prediction.topLeft[0],
+                                prediction.topLeft[1],
+                                prediction.bottomRight[0] - prediction.topLeft[0],
+                                prediction.bottomRight[1] - prediction.topLeft[1]
+                            ];
 
-    // Setup high-quality video recording
-    const stream = outputCanvas.captureStream(30); // 30fps
-    const quality = qualitySettings[qualitySelect.value];
-    
-    mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm; codecs=vp9',
-      videoBitsPerSecond: quality
-    });
+                            // Apply Blur Effect
+                            ctx.save();
+                            ctx.beginPath();
+                            ctx.rect(x, y, width, height);
+                            ctx.clip();
+                            ctx.filter = 'blur(15px)';
+                            ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+                            ctx.restore();
+                        });
+                    });
 
-    mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'blurred-video.webm';
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+                    processedFrames++;
+                    requestAnimationFrame(processFrame);
+                }
 
-    mediaRecorder.start();
+                inputVideo.currentTime = 0;
+                inputVideo.play();
+                requestAnimationFrame(processFrame);
 
-    // Process video frames
-    const totalFrames = inputVideo.duration * 30; // 30 FPS
-    let currentFrame = 0;
+            } catch (error) {
+                statusEl.innerHTML = `❌ Processing Error: ${error.message}`;
+                isProcessing = false;
+                console.error("Processing error:", error);
+            }
+        }
 
-    const processFrame = async () => {
-      if (!isProcessing) return;
+        // 3. Save & Download
+        function saveVideo() {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `blurred-video-${Date.now()}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            chunks = [];
+        }
 
-      // Draw video frame to canvas
-      ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-
-      // Detect faces
-      const predictions = await model.estimateFaces(inputVideo, false);
-      if (predictions.length > 0) {
-        predictions.forEach(pred => {
-          const [x, y, width, height] = [
-            pred.topLeft[0],
-            pred.topLeft[1],
-            pred.bottomRight[0] - pred.topLeft[0],
-            pred.bottomRight[1] - pred.topLeft[1]
-          ];
-
-          // Apply blur
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x, y, width, height);
-          ctx.clip();
-          ctx.filter = 'blur(20px)';
-          ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
-          ctx.restore();
+        // Event Listeners
+        videoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                inputVideo.src = URL.createObjectURL(file);
+                inputVideo.style.display = 'block';
+                processBtn.disabled = false;
+            }
         });
-      }
 
-      // Update progress
-      currentFrame++;
-      const progress = (currentFrame / totalFrames) * 100;
-      progressBar.style.width = `${progress}%`;
-
-      if (currentFrame < totalFrames) {
-        inputVideo.currentTime = currentFrame / 30;
-        setTimeout(processFrame, 0);
-      } else {
-        isProcessing = false;
-        mediaRecorder.stop();
-        processBtn.classList.remove('processing');
-        spinner.style.display = 'none';
-        downloadBtn.disabled = false;
-        setStatus('Processing complete!');
-      }
-    };
-
-    processFrame();
-  } catch (error) {
-    setStatus('Error processing video: ' + error.message, true);
-    isProcessing = false;
-    processBtn.classList.remove('processing');
-    spinner.style.display = 'none';
-  }
-}
-
-// Event listeners
-videoInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    inputVideo.src = URL.createObjectURL(file);
-    inputVideo.style.display = 'block';
-    processBtn.disabled = false;
-  }
-});
-
-processBtn.addEventListener('click', processVideo);
-
-// Load model on page load
-window.addEventListener('load', loadModel);
-</script>
+        processBtn.addEventListener('click', processVideo);
+        window.addEventListener('load', initializeApp);
+    </script>
 </body>
 </html>
