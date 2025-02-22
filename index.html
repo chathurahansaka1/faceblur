@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - Fixed MP4 Output</title>
+  <title>Neon Face Blur - Upload Fixed</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -228,35 +228,61 @@
       blurValue.textContent = currentBlur;
     });
 
-    // Process video
-    videoInput.addEventListener('change', async () => {
-      if (!model) return alert("Model not loaded yet!");
+    // Fix upload trigger
+    videoInput.addEventListener('click', () => {
+      console.log("File input clicked!");
+    });
 
-      const videoFile = videoInput.files[0];
-      if (!videoFile) return;
+    videoInput.addEventListener('change', async (event) => {
+      console.log("File input changed!", event.target.files);
+      if (!model) {
+        alert("Model not loaded yet!");
+        return;
+      }
+
+      const videoFile = event.target.files[0];
+      if (!videoFile) {
+        console.log("No file selected!");
+        return;
+      }
 
       loader.style.display = 'block';
       downloadBtn.disabled = true;
+      console.log("Video selected:", videoFile.name, videoFile.size);
 
       const videoUrl = URL.createObjectURL(videoFile);
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
+      videoElement.muted = true; // Mute to avoid playback noise
+      videoElement.preload = 'auto'; // Preload to help with local files
 
-      await new Promise(resolve => {
-        videoElement.onloadedmetadata = resolve;
+      await new Promise((resolve, reject) => {
+        videoElement.onloadedmetadata = () => {
+          console.log("Video metadata loaded:", videoElement.videoWidth, videoElement.videoHeight, videoElement.duration);
+          resolve();
+        };
+        videoElement.onerror = () => {
+          console.error("Error loading video metadata");
+          reject(new Error("Failed to load video metadata"));
+        };
+      }).catch(error => {
+        console.error("Metadata loading error:", error);
+        alert("Failed to load video. Please ensure it’s a valid video file and try again.");
+        loader.style.display = 'none';
+        return;
       });
 
       const targetWidth = videoElement.videoWidth;
       const targetHeight = videoElement.videoHeight;
       const duration = videoElement.duration;
-      const frameRate = 30; // Default, as exact FPS isn’t reliably accessible
+      const frameRate = 30; // Default, as exact FPS isn’t easily accessible
       outputCanvas.width = targetWidth;
       outputCanvas.height = targetHeight;
 
       const ctx = outputCanvas.getContext('2d', { alpha: false });
       const stream = outputCanvas.captureStream(frameRate);
-      
-      // Ensure audio tracks are added
+
+      // Add audio tracks
       const audioTracks = videoElement.captureStream().getAudioTracks();
       if (audioTracks.length > 0) {
         audioTracks.forEach(track => {
@@ -264,24 +290,23 @@
           stream.addTrack(track);
         });
       } else {
-        console.warn("No audio tracks found in the input video.");
+        console.warn("No audio tracks found in input video.");
       }
 
-      // Use WebM for broader compatibility, convert to MP4 via workaround if needed
       const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus', // Reliable format
-        videoBitsPerSecond: 5000000, // 5 Mbps for speed
-        audioBitsPerSecond: 128000
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 3000000, // 3 Mbps
+        audioBitsPerSecond: 96000   // 96 kbps
       });
       const chunks = [];
       recorder.ondataavailable = e => {
-        console.log("Data chunk received:", e.data);
+        console.log("Chunk received:", e.data.size);
         chunks.push(e.data);
       };
       recorder.onstop = () => {
-        console.log("Recording stopped, chunks:", chunks.length);
+        console.log("Recording stopped, total chunks:", chunks.length);
         const blob = new Blob(chunks, { type: 'video/webm' });
-        finalizeDownload(blob, 'webm'); // Use WebM, convert to MP4 manually if needed
+        finalizeDownload(blob);
         loader.style.display = 'none';
       };
       recorder.onerror = (e) => {
@@ -289,15 +314,24 @@
         alert("Processing failed. Please try again.");
         loader.style.display = 'none';
       };
+      recorder.onstart = () => console.log("Recorder started!");
 
-      console.log("Starting recorder...");
-      recorder.start(100);
-      videoElement.playbackRate = 1; // Normal speed for accurate processing
-      videoElement.play();
+      recorder.start(50);
+      videoElement.playbackRate = 2;
+      try {
+        await videoElement.play();
+        console.log("Video playback started!");
+      } catch (error) {
+        console.error("Playback failed:", error);
+        alert("Failed to play video. Please try again or use a web server.");
+        recorder.stop();
+        return;
+      }
+
       processing = true;
       let frameCounter = 0;
 
-      (async function processFrame() {
+      async function processFrame() {
         if (!processing || videoElement.ended) {
           console.log("Processing complete, stopping recorder...");
           recorder.stop();
@@ -306,11 +340,14 @@
 
         ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-        // Detect faces every 15 frames
-        if (frameCounter % 15 === 0) {
-          lastPredictions = await model.estimateFaces(videoElement, false, true);
-          faceCount.textContent = lastPredictions.length;
-          console.log("Faces detected:", lastPredictions.length);
+        if (frameCounter % 20 === 0) {
+          try {
+            lastPredictions = await model.estimateFaces(videoElement, false, true);
+            faceCount.textContent = lastPredictions.length;
+            console.log("Faces detected:", lastPredictions.length);
+          } catch (error) {
+            console.error("Face detection failed:", error);
+          }
         }
 
         lastPredictions.forEach(pred => {
@@ -338,18 +375,19 @@
         progressBar.style.width = `${progressPercent}%`;
 
         requestAnimationFrame(processFrame);
-      })();
+      }
+
+      requestAnimationFrame(processFrame);
     });
 
     // Download handler
-    function finalizeDownload(blob, format = 'webm') {
+    function finalizeDownload(blob) {
       try {
         console.log("Finalizing download, blob size:", blob.size);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        // Force MP4 extension despite WebM format (for compatibility); use a converter if true MP4 is needed
-        a.download = `blurred-video-${Date.now()}.mp4`;
+        a.download = `blurred-video-${Date.now()}.mp4`; // WebM named as MP4
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
@@ -357,7 +395,7 @@
         downloadBtn.disabled = false;
       } catch (error) {
         console.error("Download failed:", error);
-        alert("Download failed. Please try again.");
+        alert("Download failed. Please try again or use a web server.");
         downloadBtn.disabled = false;
       }
     }
