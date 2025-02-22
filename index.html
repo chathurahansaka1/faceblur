@@ -1,368 +1,474 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>FaceGuard: Advanced Video Anonymizer</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-    <style>
-        /* CSS styles for the application */
-        :root {
-            --primary-green: #10e956;
-            --secondary-green: #05c541;
-            --dark-bg: #0a1f12;
-            --light-green: #2bff6c;
-            --text-color: #e0ffe6;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CyberBlur: AI Face Anonymizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-neon: #00ff87;
+      --secondary-neon: #0cffd4;
+      --background-dark: #0a0a1a;
+      --accent-dark: #1a1a2e;
+      --text-glow: rgba(0, 255, 135, 0.7);
+    }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, var(--dark-bg) 0%, #041a0a 100%);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            color: var(--text-color);
-        }
+    body {
+      font-family: 'Orbitron', sans-serif;
+      background: linear-gradient(135deg, var(--background-dark) 0%, #111 100%);
+      color: var(--primary-neon);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      perspective: 1000px;
+    }
 
-        .container {
-            background: rgba(16, 233, 86, 0.1);
-            border: 2px solid var(--primary-green);
-            border-radius: 20px;
-            padding: 40px;
-            width: 100%;
-            max-width: 700px;
-            text-align: center;
-            box-shadow: 0 0 30px rgba(16, 233, 86, 0.2);
-        }
+    .cyber-container {
+      background: rgba(26, 26, 46, 0.8);
+      border: 2px solid var(--primary-neon);
+      border-radius: 15px;
+      padding: 30px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 
+        0 0 20px rgba(0, 255, 135, 0.3),
+        0 0 50px rgba(0, 255, 135, 0.2);
+      backdrop-filter: blur(10px);
+      transform: rotateX(10deg);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
 
-        .upload-box {
-            border: 3px dashed var(--primary-green);
-            border-radius: 15px;
-            padding: 50px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-bottom: 20px;
-        }
+    .cyber-container:hover {
+      transform: rotateX(0deg) scale(1.02);
+      box-shadow: 
+        0 0 30px rgba(0, 255, 135, 0.5),
+        0 0 60px rgba(0, 255, 135, 0.3);
+    }
 
-        .upload-box:hover {
-            background: rgba(16, 233, 86, 0.1);
-            border-color: var(--light-green);
-        }
+    .cyber-container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, 
+        transparent 20%, 
+        var(--primary-neon) 50%, 
+        transparent 80%);
+      animation: scan 4s linear infinite;
+      opacity: 0.1;
+    }
 
-        #fileInput {
-            display: none;
-        }
+    @keyframes scan {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
 
-        .btn {
-            background: var(--primary-green);
-            color: var(--dark-bg);
-            border: none;
-            padding: 12px 25px;
-            border-radius: 10px;
-            cursor: pointer;
-            margin: 10px;
-            transition: all 0.3s ease;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
+    .title {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      text-shadow: 
+        0 0 10px var(--text-glow),
+        0 0 20px var(--text-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
 
-        .btn:hover {
-            background: var(--light-green);
-            transform: scale(1.05);
-        }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.02); opacity: 0.8; }
+    }
 
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+    .cyber-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
 
-        #progressBar {
-            width: 0%;
-            height: 10px;
-            background: linear-gradient(to right, var(--secondary-green), var(--primary-green));
-            margin-top: 20px;
-            border-radius: 5px;
-            transition: width 0.5s;
-        }
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
-        #status {
-            margin-top: 15px;
-            color: var(--light-green);
-            font-weight: bold;
-        }
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      background: var(--accent-dark);
+      outline: none;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+      border-radius: 10px;
+      height: 10px;
+    }
 
-        .preview-container {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-            gap: 20px;
-        }
+    input[type="range"]:hover {
+      opacity: 1;
+    }
 
-        .preview {
-            max-width: 48%;
-            max-height: 300px;
-            display: none;
-        }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: var(--primary-neon);
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--primary-neon);
+    }
 
-        .controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
-        }
+    .cyber-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
 
-        .slider-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-right: 20px;
-        }
+    .cyber-btn {
+      background: var(--primary-neon);
+      color: var(--background-dark);
+      border: none;
+      padding: 12px 25px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Orbitron', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 15px var(--primary-neon);
+    }
 
-        #blurStrength {
-            width: 200px;
-        }
+    .cyber-btn:hover {
+      background: var(--secondary-neon);
+      transform: scale(1.05);
+      box-shadow: 0 0 25px var(--secondary-neon);
+    }
 
-        .advanced-stats {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 20px;
-            background: rgba(16, 233, 86, 0.1);
-            padding: 15px;
-            border-radius: 10px;
-        }
+    .cyber-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
 
-        .loader {
-            border: 4px solid rgba(16, 233, 86, 0.2);
-            border-top: 4px solid var(--primary-green);
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-            display: none;
-        }
+    .cyber-stats {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: var(--secondary-neon);
+    }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    .progress-container {
+      width: 100%;
+      background: var(--accent-dark);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 15px;
+    }
+
+    .progress-bar {
+      height: 10px;
+      background: linear-gradient(to right, var(--primary-neon), var(--secondary-neon));
+      width: 0%;
+      transition: width 0.5s ease;
+      position: relative;
+    }
+
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255,255,255,0.2) 50%, 
+        transparent 100%);
+      animation: scan 2s linear infinite;
+    }
+
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary-neon);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      display: none;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 600px) {
+      .cyber-container {
+        margin: 10px;
+        padding: 15px;
+      }
+      .title {
+        font-size: 1.8rem;
+      }
+      .cyber-btn {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>FaceGuard: Advanced Video Anonymizer</h1>
-        
-        <div class="upload-box" id="dropZone">
-            <input type="file" id="fileInput" accept="video/*">
-            <p>Drag & Drop Video or Click to Upload</p>
-        </div>
-
-        <div class="controls">
-            <div class="slider-container">
-                <label for="blurStrength">Blur Intensity:</label>
-                <input type="range" id="blurStrength" min="5" max="50" value="20">
-                <span id="blurValue">20</span>
-            </div>
-        </div>
-
-        <div class="preview-container">
-            <video id="originalVideo" class="preview" controls></video>
-            <video id="processedVideo" class="preview" controls></video>
-        </div>
-
-        <div class="advanced-stats">
-            <div>Detected Faces: <span id="faceCount">0</span></div>
-            <div>Processing Time: <span id="processingTime">0</span> ms</div>
-        </div>
-
-        <button id="processBtn" class="btn" disabled>Process Video</button>
-        <button id="downloadBtn" class="btn" disabled>Download Anonymized Video</button>
-
-        <div id="loader" class="loader"></div>
-        <div id="progressBar"></div>
-        <div id="status"></div>
+  <div class="cyber-container">
+    <h1 class="title">CyberBlur: AI Face Anonymizer</h1>
+    
+    <div class="cyber-controls">
+      <div class="slider-container">
+        <label>Blur Intensity: <span id="blurValue">20</span>px</label>
+        <input type="range" id="blurStrength" min="5" max="50" value="20" />
+      </div>
     </div>
 
-    <canvas id="processCanvas" style="display:none;"></canvas>
+    <div class="cyber-buttons">
+      <label for="videoInput" class="cyber-btn">
+        Upload Video
+      </label>
+      <input type="file" id="videoInput" class="file-input" accept="video/*" />
+      <button id="downloadBtn" class="cyber-btn" disabled>Download Video</button>
+    </div>
 
-    <script>
-        // Core Variables
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const processBtn = document.getElementById('processBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const originalVideo = document.getElementById('originalVideo');
-        const processedVideo = document.getElementById('processedVideo');
-        const progressBar = document.getElementById('progressBar');
-        const statusText = document.getElementById('status');
-        const loader = document.getElementById('loader');
-        const blurStrength = document.getElementById('blurStrength');
-        const blurValue = document.getElementById('blurValue');
-        const faceCountDisplay = document.getElementById('faceCount');
-        const processingTimeDisplay = document.getElementById('processingTime');
-        const processCanvas = document.getElementById('processCanvas');
+    <div class="loader" id="loader"></div>
 
-        // State Variables
-        let selectedFile = null;
-        let processedBlob = null;
-        let blazefaceModel = null;
-        let currentBlurIntensity = 20;
+    <div class="progress-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
 
-        // Blur Strength Handling
-        blurStrength.addEventListener('input', () => {
-            currentBlurIntensity = blurStrength.value;
-            blurValue.textContent = currentBlurIntensity;
+    <div class="cyber-stats">
+      <div>Processing: <span id="progress">0%</span></div>
+      <div>Detected Faces: <span id="faceCount">0</span></div>
+      <div>Quality: 1080p (HD)</div>
+    </div>
+  </div>
+
+  <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
+    const videoInput = document.getElementById('videoInput');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const progress = document.getElementById('progress');
+    const faceCount = document.getElementById('faceCount');
+    const loader = document.getElementById('loader');
+    const blurStrength = document.getElementById('blurStrength');
+    const blurValue = document.getElementById('blurValue');
+    const progressBar = document.getElementById('progressBar');
+    const outputCanvas = document.createElement('canvas');
+    document.body.appendChild(outputCanvas);
+
+    let model;
+    let mediaRecorder;
+    let recordedChunks = [];
+    let processing = false;
+    let currentBlur = 20;
+
+    // Load Blazeface model
+    async function loadModel() {
+      loader.style.display = 'block';
+      try {
+        model = await blazeface.load();
+        console.log("Model loaded!");
+        loader.style.display = 'none';
+      } catch (error) {
+        console.error("Model load failed:", error);
+        alert("Error loading model. Check console.");
+        loader.style.display = 'none';
+      }
+    }
+    loadModel();
+
+    // Blur strength update
+    blurStrength.addEventListener('input', () => {
+      currentBlur = blurStrength.value;
+      blurValue.textContent = currentBlur;
+    });
+
+    // Process video automatically on upload
+    videoInput.addEventListener('change', async () => {
+      if (!model) return alert("Model not loaded!");
+      
+      const videoFile = videoInput.files[0];
+      if (!videoFile) return;
+
+      loader.style.display = 'block';
+      downloadBtn.disabled = true;
+      recordedChunks = [];
+
+      const videoUrl = URL.createObjectURL(videoFile);
+      const videoElement = document.createElement('video');
+      videoElement.src = videoUrl;
+      
+      await new Promise(resolve => {
+        videoElement.onloadedmetadata = resolve;
+      });
+
+      // High quality settings
+      outputCanvas.width = videoElement.videoWidth;
+      outputCanvas.height = videoElement.videoHeight;
+      const bitRate = 5000000; // 5 Mbps for HD quality
+
+      // Setup media recorder
+      const canvasStream = outputCanvas.captureStream(30);
+      const audioStream = await getAudioStream(videoElement);
+      if(audioStream) canvasStream.addTrack(audioStream);
+
+      mediaRecorder = new MediaRecorder(canvasStream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: bitRate
+      });
+
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const mp4Blob = convertWebMToMP4(blob);
+        downloadBtn.disabled = false;
+      };
+
+      mediaRecorder.start(100);
+
+      // Start processing
+      processing = true;
+      const startTime = Date.now();
+      const totalDuration = videoElement.duration * 1000;
+
+      (async function processFrame() {
+        if (!processing) return;
+
+        const currentTime = Date.now() - startTime;
+        videoElement.currentTime = currentTime / 1000;
+        
+        await new Promise(resolve => {
+          videoElement.onseeked = resolve;
         });
 
-        // Model Loading
-        async function loadBlazefaceModel() {
-            try {
-                loader.style.display = 'block';
-                blazefaceModel = await blazeface.load();
-                updateStatus('AI Model Loaded Successfully');
-                loader.style.display = 'none';
-            } catch (error) {
-                updateStatus('Model Loading Failed: ' + error.message);
-                loader.style.display = 'none';
-            }
+        const ctx = outputCanvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, outputCanvas.width, outputCanvas.height);
+
+        // Face detection and blur
+        const predictions = await model.estimateFaces(videoElement);
+        faceCount.textContent = predictions.length;
+
+        predictions.forEach(pred => {
+          const [x, y, width, height] = [
+            pred.topLeft[0],
+            pred.topLeft[1],
+            pred.bottomRight[0] - pred.topLeft[0],
+            pred.bottomRight[1] - pred.topLeft[1]
+          ];
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, width, height);
+          ctx.clip();
+          ctx.filter = `blur(${currentBlur}px)`;
+          ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+          ctx.restore();
+        });
+
+        // Update progress
+        const progressPercent = (currentTime / totalDuration) * 100;
+        progress.textContent = `${progressPercent.toFixed(1)}%`;
+        progressBar.style.width = `${progressPercent}%`;
+
+        if (currentTime < totalDuration) {
+          requestAnimationFrame(processFrame);
+        } else {
+          stopProcessing();
         }
-        loadBlazefaceModel();
+      })();
 
-        // Comprehensive File Handling
-        function setupFileHandlers() {
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                dropZone.addEventListener(eventName, preventDefaults, false);
-            });
+      loader.style.display = 'none';
+    });
 
-            dropZone.addEventListener('drop', handleDrop, false);
-            dropZone.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', handleFileUpload);
+    // Get audio stream
+    async function getAudioStream(videoElement) {
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaElementSource(videoElement);
+        const destination = audioContext.createMediaStreamDestination();
+        source.connect(destination);
+        return destination.stream.getAudioTracks()[0];
+      } catch {
+        return null;
+      }
+    }
+
+    // Convert WebM to MP4 (requires FFmpeg.wasm)
+    async function convertWebMToMP4(webmBlob) {
+      loader.style.display = 'block';
+      try {
+        await ffmpeg.load();
+        ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
+        await ffmpeg.run('-i', 'input.webm', '-c', 'copy', 'output.mp4');
+        const data = ffmpeg.FS('readFile', 'output.mp4');
+        return new Blob([data.buffer], { type: 'video/mp4' });
+      } catch (error) {
+        console.error('Conversion error:', error);
+        alert('Error converting video. Check console.');
+        return null;
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+    // Download handler
+    downloadBtn.addEventListener('click', async () => {
+      loader.style.display = 'block';
+      downloadBtn.disabled = true;
+      
+      try {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const mp4Blob = await convertWebMToMP4(blob);
+        
+        if (mp4Blob) {
+          const url = URL.createObjectURL(mp4Blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `cyberblur-${Date.now()}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(url);
         }
+      } catch (error) {
+        console.error('Download error:', error);
+        alert('Error downloading video. Check console.');
+      } finally {
+        loader.style.display = 'none';
+        downloadBtn.disabled = false;
+      }
+    });
 
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            processFileSelection(files[0]);
-        }
-
-        function handleFileUpload() {
-            processFileSelection(fileInput.files[0]);
-        }
-
-        function processFileSelection(file) {
-            if (!file || !file.type.startsWith('video/')) {
-                alert('Please select a valid video file.');
-                return;
-            }
-
-            selectedFile = file;
-            processBtn.disabled = false;
-
-            // Video Preview
-            const fileURL = URL.createObjectURL(file);
-            originalVideo.src = fileURL;
-            originalVideo.style.display = 'block';
-
-            updateStatus(`File Selected: ${file.name}`);
-        }
-
-        // Advanced Video Processing
-        async function processVideo() {
-            if (!selectedFile || !blazefaceModel) {
-                alert('Please select a video and ensure model is loaded.');
-                return;
-            }
-
-            const startTime = performance.now();
-            updateStatus('Processing Video...');
-            processBtn.disabled = true;
-            loader.style.display = 'block';
-            progressBar.style.width = '0%';
-
-            // Video Processing Logic
-            const videoElement = document.createElement('video');
-            videoElement.src = URL.createObjectURL(selectedFile);
-
-            await new Promise(resolve => {
-                videoElement.onloadedmetadata = resolve;
-            });
-
-            processCanvas.width = videoElement.videoWidth;
-            processCanvas.height = videoElement.videoHeight;
-            const ctx = processCanvas.getContext('2d');
-
-            // Simulated Processing with Face Detection
-            let detectedFaces = 0;
-            await new Promise(resolve => {
-                let progress = 0;
-                const interval = setInterval(async () => {
-                    progress += 10;
-                    progressBar.style.width = `${progress}%`;
-
-                    // Simulate face detection
-                    const prediction = await blazefaceModel.estimateFaces(videoElement);
-                    detectedFaces += prediction.length;
-
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 200);
-            });
-
-            const endTime = performance.now();
-            const processingDuration = Math.round(endTime - startTime);
-
-            // Update UI
-            faceCountDisplay.textContent = detectedFaces;
-            processingTimeDisplay.textContent = processingDuration;
-            
-            // Create Processed Video
-            processedVideo.src = URL.createObjectURL(selectedFile);
-            processedVideo.style.display = 'block';
-
-            updateStatus('Video Processed Successfully');
-            downloadBtn.disabled = false;
-            loader.style.display = 'none';
-        }
-
-        // Download Functionality
-        function downloadProcessedVideo() {
-            if (!processedBlob) {
-                alert('No processed video available.');
-                return;
-            }
-
-            const downloadLink = document.createElement('a');
-            downloadLink.href = URL.createObjectURL(processedBlob);
-            downloadLink.download = 'anonymized-video.mp4';
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
-        }
-
-        // Utility Functions
-        function updateStatus(message) {
-            statusText.textContent = message;
-            console.log(message);
-        }
-
-        // Event Listeners
-        processBtn.addEventListener('click', processVideo);
-        downloadBtn.addEventListener('click', downloadProcessedVideo);
-        setupFileHandlers();
-    </script>
+    function stopProcessing() {
+      processing = false;
+      mediaRecorder.stop();
+    }
+  </script>
 </body>
 </html>
