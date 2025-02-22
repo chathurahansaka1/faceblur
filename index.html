@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberBlur: Real-Time Face Anonymizer</title>
+    <title>CyberBlur: Auto Face Anonymizer</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
@@ -13,127 +13,12 @@
             --dark-secondary: #1e1e1e;
             --neon-glow: rgba(0, 255, 135, 0.3);
         }
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            font-family: 'Orbitron', 'Segoe UI', sans-serif;
-            background: var(--dark-bg);
-            color: var(--neon-green);
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-        .cyber-container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-            text-align: center;
-        }
-        .cyber-title {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
-            text-shadow: 0 0 10px var(--neon-glow);
-            letter-spacing: 2px;
-        }
-        .video-wrapper {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        video, canvas {
-            max-width: 45%;
-            border: 2px solid var(--neon-green);
-            border-radius: 15px;
-            box-shadow: 0 0 15px var(--neon-glow);
-        }
-        .cyber-controls {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .cyber-btn {
-            background: var(--neon-green);
-            color: var(--dark-bg);
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-family: 'Orbitron', sans-serif;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .cyber-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px var(--neon-green);
-        }
-        .cyber-file-input {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-        }
-        .cyber-file-input input[type=file] {
-            font-size: 100px;
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            cursor: pointer;
-        }
-        .cyber-slider {
-            appearance: none;
-            width: 200px;
-            height: 10px;
-            background: var(--dark-secondary);
-            outline: none;
-            opacity: 0.7;
-            transition: opacity .2s;
-            border-radius: 5px;
-        }
-        .cyber-slider:hover {
-            opacity: 1;
-        }
-        .cyber-slider::-webkit-slider-thumb {
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            background: var(--neon-green);
-            cursor: pointer;
-            border-radius: 50%;
-        }
-        .cyber-stats {
-            background: var(--dark-secondary);
-            padding: 10px;
-            border-radius: 10px;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .loader {
-            border: 4px solid var(--dark-secondary);
-            border-top: 4px solid var(--neon-green);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* ... (පෙර CSS ස්ටයිල් එකම තබාගන්න) ... */
     </style>
 </head>
 <body>
     <div class="cyber-container">
-        <h1 class="cyber-title">CyberBlur: Face Anonymizer</h1>
+        <h1 class="cyber-title">CyberBlur: Auto Face Anonymizer</h1>
         
         <div class="video-wrapper">
             <video id="inputVideo" controls playsinline></video>
@@ -149,12 +34,12 @@
                 <label>Blur Strength: <span id="blurValue">20</span>px</label>
                 <input type="range" id="blurStrength" class="cyber-slider" min="5" max="50" value="20">
             </div>
-            <button id="downloadBtn" class="cyber-btn" disabled>Download</button>
+            <button id="downloadBtn" class="cyber-btn" disabled>Download HD Video</button>
         </div>
 
         <div class="cyber-stats">
             <div>Faces: <span id="faceCount">0</span></div>
-            <div>Processing: <span id="processingTime">0ms</span></div>
+            <div>Status: <span id="status">Idle</span></div>
             <div>FPS: <span id="frameRate">0</span></div>
         </div>
 
@@ -169,65 +54,80 @@
         const blurStrength = document.getElementById('blurStrength');
         const blurValue = document.getElementById('blurValue');
         const faceCount = document.getElementById('faceCount');
-        const processingTime = document.getElementById('processingTime');
+        const statusLabel = document.getElementById('status');
         const frameRate = document.getElementById('frameRate');
         const loader = document.getElementById('loader');
 
         let model;
         let mediaRecorder;
         let recordedChunks = [];
-        let isProcessing = false;
         let blurLevel = 20;
         let frameTimes = [];
-        let animationFrameId;
+        let processingStartTime;
 
-        // Load Blazeface model
+        // Model load කිරීම
         async function loadModel() {
             loader.style.display = 'block';
             try {
                 model = await blazeface.load();
-                console.log("Model loaded!");
                 loader.style.display = 'none';
             } catch (error) {
                 console.error("Model load failed:", error);
-                alert("Error loading model. Check console.");
+                alert("Error loading model");
                 loader.style.display = 'none';
             }
         }
         loadModel();
 
-        // Video file handling
+        // Video upload කිරීම
         videoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
             inputVideo.src = url;
+            
             await new Promise(resolve => inputVideo.onloadedmetadata = resolve);
             outputCanvas.width = inputVideo.videoWidth;
             outputCanvas.height = inputVideo.videoHeight;
-            downloadBtn.disabled = true;
+            
             startProcessing();
         });
 
-        // Blur strength adjustment
+        // Blur strength update කිරීම
         blurStrength.addEventListener('input', () => {
             blurLevel = blurStrength.value;
             blurValue.textContent = blurLevel;
         });
 
-        // Start processing
-        function startProcessing() {
-            isProcessing = true;
-            recordedChunks = [];
-            startRecording();
+        // Processing ආරම්භ කිරීම
+        async function startProcessing() {
+            statusLabel.textContent = "Processing...";
+            downloadBtn.disabled = true;
+            processingStartTime = Date.now();
+            
+            // Video recording ආරම්භ කිරීම
+            const canvasStream = outputCanvas.captureStream(30);
+            const audioStream = inputVideo.captureStream().getAudioTracks();
+            const combinedStream = new MediaStream([
+                ...canvasStream.getVideoTracks(),
+                ...audioStream
+            ]);
+
+            mediaRecorder = new MediaRecorder(combinedStream, {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 5000000 // 5 Mbps for HD quality
+            });
+
+            mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+            mediaRecorder.onstop = exportVideo;
+            mediaRecorder.start(100);
+
+            // Real-time processing loop
             processVideo();
             inputVideo.play();
         }
 
         // Video processing loop
         async function processVideo() {
-            if (!isProcessing) return;
-
-            const start = performance.now();
             const ctx = outputCanvas.getContext('2d');
             ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
 
@@ -243,12 +143,6 @@
                         pred.bottomRight[1] - pred.topLeft[1]
                     ];
 
-                    // Highlight detected face with a rectangle
-                    ctx.strokeStyle = 'lime';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(x, y, w, h);
-
-                    // Apply blur to the detected face
                     ctx.save();
                     ctx.beginPath();
                     ctx.rect(x, y, w, h);
@@ -258,65 +152,50 @@
                     ctx.restore();
                 });
 
-                // Frame rate calculation
-                const duration = performance.now() - start;
-                frameTimes.push(duration);
-                if (frameTimes.length > 10) frameTimes.shift();
-                const avgTime = frameTimes.reduce((a, b) => a + b) / frameTimes.length;
-                processingTime.textContent = `${avgTime.toFixed(1)}ms`;
-                frameRate.textContent = `${(1000 / avgTime).toFixed(1)}`;
+                // FPS calculation
+                const now = performance.now();
+                frameTimes.push(now);
+                frameTimes = frameTimes.filter(t => t > now - 1000);
+                frameRate.textContent = frameTimes.length;
 
             } catch (error) {
                 console.error("Processing error:", error);
             }
 
-            animationFrameId = requestAnimationFrame(processVideo);
+            if (!inputVideo.paused && !inputVideo.ended) {
+                requestAnimationFrame(processVideo);
+            } else {
+                stopProcessing();
+            }
         }
 
-        // Media recording
-        function startRecording() {
-            const stream = outputCanvas.captureStream(30);
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 2.5e6
-            });
-
-            mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
-            mediaRecorder.onstop = exportVideo;
-            mediaRecorder.start(100);
+        // Processing නැවතිම
+        function stopProcessing() {
+            mediaRecorder?.stop();
+            statusLabel.textContent = `Processed in ${((Date.now() - processingStartTime)/1000).toFixed(1)}s`;
         }
 
-        // Export video
+        // Video export කිරීම
         async function exportVideo() {
             loader.style.display = 'block';
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             
+            // WebM to MP4 conversion (අවශ්ය නම්)
             const url = URL.createObjectURL(blob);
+            
             downloadBtn.href = url;
             downloadBtn.download = `blurred-video-${Date.now()}.webm`;
             downloadBtn.disabled = false;
             loader.style.display = 'none';
         }
 
-        // Stop processing
-        function stopProcessing() {
-            isProcessing = false;
-            cancelAnimationFrame(animationFrameId);
-            mediaRecorder?.stop();
-            inputVideo.pause();
-        }
-
-        // Reset on window close
-        window.addEventListener('beforeunload', () => {
-            if (isProcessing) stopProcessing();
-        });
-
-        // Download button click handler
+        // Download button handling
         downloadBtn.addEventListener('click', (e) => {
-            if (downloadBtn.disabled) {
-                e.preventDefault();
-            }
+            if (downloadBtn.disabled) e.preventDefault();
         });
+
+        // Video අවසන් වූ විට
+        inputVideo.addEventListener('ended', stopProcessing);
     </script>
 </body>
 </html>
