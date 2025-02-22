@@ -39,7 +39,7 @@
       gap: 10px;
       justify-content: center;
     }
-    button {
+    button, a.download-btn {
       background: var(--primary-color);
       color: #000;
       border: none;
@@ -48,8 +48,10 @@
       border-radius: 8px;
       font-size: 14px;
       transition: transform 0.2s, background 0.3s;
+      text-decoration: none;
+      display: inline-block;
     }
-    button:hover {
+    button:hover, a.download-btn:hover {
       background: #00cc70;
       transform: scale(1.05);
     }
@@ -80,12 +82,8 @@
       margin: 10px auto;
     }
     @keyframes spin {
-      0% {
-        transform: rotate(0deg);
-      }
-      100% {
-        transform: rotate(360deg);
-      }
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
     .custom-file-upload {
       display: inline-block;
@@ -114,11 +112,12 @@
         <label for="blurStrength">Blur Strength: <span id="blurValue">20</span>px</label>
         <input type="range" id="blurStrength" min="5" max="50" value="20" />
       </div>
-      <!-- Changed file input markup -->
+      <!-- File input for video -->
       <label for="videoInput" class="custom-file-upload">Choose Video</label>
       <input type="file" id="videoInput" accept="video/*" style="display: none;" />
       <button id="toggleProcessing">Start Processing</button>
-      <button id="downloadBtn" disabled>Download MP4</button>
+      <!-- Changed download button to an anchor -->
+      <a id="downloadBtn" class="download-btn" download style="pointer-events: none;">Download Video</a>
     </div>
 
     <div class="stats">
@@ -150,7 +149,7 @@
     let frameTimes = [];
     let animationFrameId;
 
-    // Load Blazeface model with progress
+    // Load the Blazeface model
     async function loadModel() {
       loader.style.display = 'block';
       try {
@@ -165,7 +164,7 @@
     }
     loadModel();
 
-    // Video file handling
+    // Handle video file selection
     videoInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file) {
@@ -174,17 +173,18 @@
         await new Promise(resolve => inputVideo.onloadedmetadata = resolve);
         outputCanvas.width = inputVideo.videoWidth;
         outputCanvas.height = inputVideo.videoHeight;
-        downloadBtn.disabled = true;
+        // Disable download button until processing completes
+        downloadBtn.style.pointerEvents = 'none';
       }
     });
 
-    // Blur strength adjustment
+    // Adjust blur strength
     blurStrength.addEventListener('input', () => {
       blurLevel = blurStrength.value;
       blurValue.textContent = blurLevel;
     });
 
-    // Toggle processing
+    // Toggle processing (start/stop)
     toggleBtn.addEventListener('click', () => {
       if (!model) return alert("Model not loaded!");
       
@@ -200,86 +200,93 @@
       }
     });
 
-    // Video processing loop
+    // Main video processing loop
     async function processVideo() {
       if (!isProcessing) return;
 
-      const start = performance.now();
+      const startTime = performance.now();
       const ctx = outputCanvas.getContext('2d');
-      ctx.drawImage(inputVideo, 0, 0);
+
+      // Draw the current video frame
+      ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
 
       try {
         const predictions = await model.estimateFaces(inputVideo);
         faceCount.textContent = predictions.length;
 
-        predictions.forEach(pred => {
-          const [x, y, w, h] = [
-            pred.topLeft[0],
-            pred.topLeft[1],
-            pred.bottomRight[0] - pred.topLeft[0],
-            pred.bottomRight[1] - pred.topLeft[1]
-          ];
-
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x, y, w, h);
-          ctx.clip();
-          ctx.filter = `blur(${blurLevel}px)`;
-          ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
-          ctx.restore();
-        });
-
+        // If at least one face is detected, apply blur to each face region.
+        if (predictions.length > 0) {
+          predictions.forEach(pred => {
+            const [x, y] = pred.topLeft;
+            const [x2, y2] = pred.bottomRight;
+            const w = x2 - x;
+            const h = y2 - y;
+  
+            ctx.save();
+            // Define region for blur
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+  
+            // Apply blur filter and redraw that region from the current frame
+            ctx.filter = `blur(${blurLevel}px)`;
+            ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
+            ctx.restore();
+          });
+        }
+        // (If no face is detected, nothing extra is drawn so the image remains unblurred.)
+  
         // Frame rate calculation
-        const duration = performance.now() - start;
+        const duration = performance.now() - startTime;
         frameTimes.push(duration);
         if (frameTimes.length > 10) frameTimes.shift();
         const avgTime = frameTimes.reduce((a, b) => a + b) / frameTimes.length;
         processingTime.textContent = `${avgTime.toFixed(1)}ms`;
         frameRate.textContent = `${(1000 / avgTime).toFixed(1)}`;
-
+  
       } catch (error) {
         console.error("Processing error:", error);
       }
-
+  
       animationFrameId = requestAnimationFrame(processVideo);
     }
 
-    // Media recording
+    // Start recording the canvas stream
     function startRecording() {
       const stream = outputCanvas.captureStream(30);
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9',
         videoBitsPerSecond: 2.5e6
       });
-
       mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
       mediaRecorder.onstop = exportVideo;
       mediaRecorder.start(100);
     }
 
-    // Export video
+    // Export the recorded video and enable download
     async function exportVideo() {
       loader.style.display = 'block';
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       
-      // Convert to MP4 using FFmpeg (example pseudocode)
-      // const mp4Blob = await convertToMP4(blob);
-      
+      // If you need MP4 conversion, integrate FFmpeg here.
+      // For now, the video remains in WebM format.
       const url = URL.createObjectURL(blob);
       downloadBtn.href = url;
-      downloadBtn.download = `blurred-video-${Date.now()}.mp4`;
-      downloadBtn.disabled = false;
+      downloadBtn.download = `blurred-video-${Date.now()}.webm`;
+      downloadBtn.style.pointerEvents = 'auto';
       loader.style.display = 'none';
     }
 
-    // Cleanup
+    // Stop the processing loop and recording
     function stopProcessing() {
       cancelAnimationFrame(animationFrameId);
-      mediaRecorder?.stop();
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
       inputVideo.pause();
     }
 
-    // Reset on window close
+    // Clean up on window close
     window.addEventListener('beforeunload', () => {
       if (isProcessing) stopProcessing();
     });
