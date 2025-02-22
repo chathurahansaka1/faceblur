@@ -1,100 +1,245 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Video Face Blur Tool</title>
-    <script src="https://trackingjs.com/build/tracking-min.js"></script>
-    <script src="https://trackingjs.com/build/data/face-min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/stackblur-canvas@1.4.1/dist/stackblur.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberBlur: Face Anonymizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <style>
+        body {
+            background-color: #0a192f;
+            color: #64ffda;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .cyber-container {
+            background-color: #112240;
+            border: 2px solid #64ffda;
+            box-shadow: 0 0 15px #64ffda;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 800px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+        input[type="file"], select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 2px solid #64ffda;
+            background-color: #0a192f;
+            color: #64ffda;
+            font-size: 1rem;
+        }
+        button {
+            background-color: #64ffda;
+            color: #0a192f;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #00ff87;
+        }
+        video, canvas {
+            width: 100%;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #0a192f;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar-inner {
+            height: 100%;
+            background: linear-gradient(to right, #64ffda, #00ff87);
+            width: 0%;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <h1>Video Face Blur Tool</h1>
-    <input type="file" id="videoInput" accept="video/*">
-    <br><br>
-    <video id="inputVideo" controls width="600"></video>
-    <br>
-    <button onclick="processVideo()" style="padding: 10px; margin: 5px;">Process Video</button>
-    <a id="downloadLink" style="display: none; padding: 10px; background: #4CAF50; color: white; text-decoration: none;">Download Blurred Video</a>
+    <div class="cyber-container">
+        <h1>CyberBlur: Face Anonymizer</h1>
+        
+        <!-- File Input -->
+        <input type="file" id="videoInput" accept="video/*">
+        
+        <!-- Anonymization Options -->
+        <select id="blurType">
+            <option value="pixelate">Pixelate</option>
+            <option value="blur">Gaussian Blur</option>
+            <option value="solid">Solid Color</option>
+        </select>
+        
+        <!-- Intensity Slider -->
+        <input type="range" id="blurIntensity" min="10" max="100" value="50">
+        
+        <!-- Video and Canvas -->
+        <video id="inputVideo" controls></video>
+        <canvas id="outputCanvas"></canvas>
+        
+        <!-- Buttons -->
+        <button id="processButton">Anonymize Video</button>
+        <a id="downloadLink" class="hidden" download="anonymized_video.mp4">
+            <button>Download Anonymized Video</button>
+        </a>
+        
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+            <div class="progress-bar-inner" id="progressBar"></div>
+        </div>
+        <p id="progressText" class="hidden">Processing: 0%</p>
+    </div>
 
     <script>
+        // DOM Elements
         const videoInput = document.getElementById('videoInput');
         const inputVideo = document.getElementById('inputVideo');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const processButton = document.getElementById('processButton');
+        const downloadLink = document.getElementById('downloadLink');
+        const blurIntensity = document.getElementById('blurIntensity');
+        const blurType = document.getElementById('blurType');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        let model;
         let mediaRecorder;
         let recordedChunks = [];
 
-        // වීඩියෝ ගොනුව තෝරාගත් විට
+        // Load Blazeface Model
+        async function loadModel() {
+            model = await blazeface.load();
+        }
+        loadModel();
+
+        // Handle File Input
         videoInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
-            inputVideo.src = url;
+            const videoURL = URL.createObjectURL(file);
+            inputVideo.src = videoURL;
         });
 
-        // වීඩියෝව process කිරීම
-        function processVideo() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const tracker = new tracking.ObjectTracker('face');
-            tracker.setInitialScale(4);
-            tracker.setStepSize(2);
-            tracker.setEdgesDensity(0.1);
+        // Process Video on Button Click
+        processButton.addEventListener('click', processVideo);
 
-            inputVideo.addEventListener('loadedmetadata', function() {
-                canvas.width = inputVideo.videoWidth;
-                canvas.height = inputVideo.videoHeight;
+        async function processVideo() {
+            const ctx = outputCanvas.getContext('2d');
+            outputCanvas.width = inputVideo.videoWidth;
+            outputCanvas.height = inputVideo.videoHeight;
 
-                // MediaRecorder සකසන්න
-                const stream = canvas.captureStream();
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            // Disable Button and Show Progress
+            processButton.disabled = true;
+            processButton.textContent = 'Processing...';
+            progressText.classList.remove('hidden');
+
+            // Set Up MediaRecorder
+            const stream = outputCanvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+
+            mediaRecorder.ondataavailable = function(e) {
+                recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                downloadLink.href = url;
+                downloadLink.classList.remove('hidden');
                 recordedChunks = [];
+            };
 
-                mediaRecorder.ondataavailable = function(e) {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
+            mediaRecorder.start();
 
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.getElementById('downloadLink');
-                    a.href = url;
-                    a.download = 'blurred-video.webm';
-                    a.style.display = 'inline-block';
-                };
-
-                mediaRecorder.start();
-
-                // ප්රේම් process කිරීම
-                inputVideo.play();
-                let lastTime = 0;
-
-                const processFrame = () => {
-                    if (inputVideo.paused || inputVideo.ended) {
-                        mediaRecorder.stop();
-                        return;
-                    }
-
-                    ctx.drawImage(inputVideo, 0, 0, canvas.width, canvas.height);
-
-                    // මුහුණු හඳුනාගැනීම
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const gray = tracking.Image.grayscale(imageData.data, canvas.width, canvas.height);
-                    const faces = tracker.track(gray, canvas.width, canvas.height);
-
-                    // එක් එක් මුහුණ blur කිරීම
-                    faces.forEach(face => {
-                        const [x, y, w, h] = face;
-                        const tempCanvas = document.createElement('canvas');
-                        tempCanvas.width = w;
-                        tempCanvas.height = h;
-                        const tempCtx = tempCanvas.getContext('2d');
-                        tempCtx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
-                        StackBlur.canvasRGBA(tempCanvas, 0, 0, w, h, 15);
-                        ctx.drawImage(tempCanvas, x, y);
-                    });
-
-                    requestAnimationFrame(processFrame);
-                };
-
-                requestAnimationFrame(processFrame);
+            // Process Frames
+            inputVideo.addEventListener('play', async () => {
+                while (!inputVideo.paused && !inputVideo.ended) {
+                    await processFrame();
+                    updateProgress();
+                    await waitForNextFrame();
+                }
+                mediaRecorder.stop();
+                processButton.disabled = false;
+                processButton.textContent = 'Anonymize Video';
             });
+
+            inputVideo.play();
+        }
+
+        async function processFrame() {
+            const ctx = outputCanvas.getContext('2d');
+            ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+
+            // Detect Faces
+            const predictions = await model.estimateFaces(inputVideo, false);
+            
+            // Anonymize Faces
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = [
+                    prediction.topLeft[0],
+                    prediction.topLeft[1],
+                    prediction.bottomRight[0] - prediction.topLeft[0],
+                    prediction.bottomRight[1] - prediction.topLeft[1]
+                ];
+                anonymizeFace(ctx, x, y, width, height);
+            });
+        }
+
+        function anonymizeFace(ctx, x, y, w, h) {
+            const type = blurType.value;
+            const intensity = blurIntensity.value / 10;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+
+            switch (type) {
+                case 'pixelate':
+                    ctx.imageSmoothingEnabled = false;
+                    const size = Math.max(5, w / intensity);
+                    ctx.drawImage(outputCanvas, x, y, w, h, x, y, size, size);
+                    ctx.drawImage(outputCanvas, x, y, size, size, x, y, w, h);
+                    break;
+
+                case 'blur':
+                    ctx.filter = `blur(${intensity}px)`;
+                    ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
+                    break;
+
+                case 'solid':
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(x, y, w, h);
+                    break;
+            }
+            ctx.restore();
+        }
+
+        function updateProgress() {
+            const progress = Math.round((inputVideo.currentTime / inputVideo.duration) * 100);
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `Processing: ${progress}%`;
+        }
+
+        function waitForNextFrame() {
+            return new Promise(resolve => requestAnimationFrame(resolve));
         }
     </script>
 </body>
