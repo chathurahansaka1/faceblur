@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - MP4 Output</title>
+  <title>Neon Face Blur - Fast MP4</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -183,7 +183,7 @@
     <div class="stats">
       <div>Progress: <span id="progress">0%</span></div>
       <div>Detected Faces: <span id="faceCount">0</span></div>
-      <div>Quality: 1080p (with Audio)</div>
+      <div>Quality: Same as Input (with Audio)</div>
     </div>
 
     <div class="loader" id="loader"></div>
@@ -248,16 +248,17 @@
         videoElement.onloadedmetadata = resolve;
       });
 
-      const targetWidth = Math.min(videoElement.videoWidth, 1920); // 1080p
-      const targetHeight = Math.min(videoElement.videoHeight, 1080);
+      // Match input video specs
+      const targetWidth = videoElement.videoWidth;
+      const targetHeight = videoElement.videoHeight;
+      const duration = videoElement.duration;
+      const frameRate = 30; // Default to 30 FPS if unknown, adjust if metadata available
+      const totalFrames = Math.floor(duration * frameRate);
+
       outputCanvas.width = targetWidth;
       outputCanvas.height = targetHeight;
 
       const ctx = outputCanvas.getContext('2d', { alpha: false });
-      const frameRate = 30;
-      const duration = Math.min(videoElement.duration, 120); // Cap at 2 minutes
-      const totalFrames = Math.floor(duration * frameRate);
-      let frameCounter = 0;
 
       // WebCodecs setup
       const encoder = new VideoEncoder({
@@ -266,21 +267,22 @@
       });
       const chunks = [];
       encoder.configure({
-        codec: 'avc1.42001E', // H.264 baseline for MP4
+        codec: 'avc1.42001E', // H.264 for MP4
         width: targetWidth,
         height: targetHeight,
-        bitrate: 8000000, // 8 Mbps for good quality and speed
+        bitrate: 8000000, // 8 Mbps for quality and speed
         framerate: frameRate
       });
 
-      // Audio handling (simplified)
+      // Audio handling
       const audioBlob = await fetch(videoUrl).then(res => res.blob());
 
       videoElement.play();
       processing = true;
+      let frameCounter = 0;
 
       (async function processFrame() {
-        if (!processing || frameCounter >= totalFrames) {
+        if (!processing || frameCounter >= totalFrames || videoElement.ended) {
           await encoder.flush();
           const videoBlob = new Blob(chunks, { type: 'video/mp4' });
           const combinedBlob = new Blob([videoBlob, audioBlob], { type: 'video/mp4' });
@@ -291,8 +293,8 @@
 
         ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-        // Detect faces every 5 frames
-        if (frameCounter % 5 === 0) {
+        // Detect faces every 10 frames for speed
+        if (frameCounter % 10 === 0) {
           lastPredictions = await model.estimateFaces(videoElement, false, true);
           faceCount.textContent = lastPredictions.length;
         }
