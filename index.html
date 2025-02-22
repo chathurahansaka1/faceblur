@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - Optimized</title>
+  <title>Neon Face Blur - Instant Output</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -147,6 +147,13 @@
       transition: width 0.4s ease;
       box-shadow: var(--shadow-glow);
     }
+    #outputVideo {
+      max-width: 100%;
+      margin-top: 20px;
+      border: 2px solid var(--neon-red);
+      border-radius: 10px;
+      box-shadow: var(--shadow-glow);
+    }
     @media (max-width: 600px) {
       .container {
         padding: 15px;
@@ -173,7 +180,7 @@
         Upload Video
       </label>
       <input type="file" id="videoInput" accept="video/*" style="display: none;" />
-      <button id="downloadBtn" disabled>Download 4K Video</button>
+      <button id="downloadBtn" disabled>Download Blurred Video</button>
     </div>
 
     <div class="progress-bar">
@@ -183,10 +190,11 @@
     <div class="stats">
       <div>Progress: <span id="progress">0%</span></div>
       <div>Detected Faces: <span id="faceCount">0</span></div>
-      <div>Quality: 4K Ultra HD (with Audio)</div>
+      <div>Quality: High Quality (with Audio)</div>
     </div>
 
     <div class="loader" id="loader"></div>
+    <video id="outputVideo" controls style="display: none;"></video>
   </div>
 
   <script>
@@ -198,6 +206,7 @@
     const blurStrength = document.getElementById('blurStrength');
     const blurValue = document.getElementById('blurValue');
     const progressBar = document.getElementById('progressBar');
+    const outputVideo = document.getElementById('outputVideo');
     const outputCanvas = document.createElement('canvas');
     outputCanvas.style.display = 'none';
     document.body.appendChild(outputCanvas);
@@ -205,6 +214,7 @@
     let model;
     let processing = false;
     let currentBlur = 25;
+    let lastPredictions = [];
 
     // Load Blazeface model
     async function loadModel() {
@@ -227,7 +237,7 @@
       blurValue.textContent = currentBlur;
     });
 
-    // Process video
+    // Process video instantly
     videoInput.addEventListener('change', async () => {
       if (!model) return alert("Model not loaded yet!");
 
@@ -246,18 +256,13 @@
         videoElement.onloadedmetadata = resolve;
       });
 
-      const targetWidth = Math.min(videoElement.videoWidth, 3840);
-      const targetHeight = Math.min(videoElement.videoHeight, 2160);
+      const targetWidth = Math.min(videoElement.videoWidth, 1920); // Reduced to 1080p for speed
+      const targetHeight = Math.min(videoElement.videoHeight, 1080);
       outputCanvas.width = targetWidth;
       outputCanvas.height = targetHeight;
 
       const ctx = outputCanvas.getContext('2d', { alpha: false });
-      const frameRate = 30; // Reduced to 30 FPS for faster processing
-      const duration = videoElement.duration;
-      const frameInterval = 1 / frameRate; // Process every 1/30th second
-      const totalFrames = Math.floor(duration / frameInterval);
-      let frameCount = 0;
-
+      const frameRate = 30;
       const stream = outputCanvas.captureStream(frameRate);
       const audioTracks = videoElement.captureStream().getAudioTracks();
       if (audioTracks.length > 0) {
@@ -266,41 +271,42 @@
 
       const recorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 10000000, // 10 Mbps for balance of quality and speed
+        videoBitsPerSecond: 5000000, // 5 Mbps for faster processing
         audioBitsPerSecond: 128000
       });
       const chunks = [];
       recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => finalizeDownload(new Blob(chunks, { type: 'video/webm' }));
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        outputVideo.src = url;
+        outputVideo.style.display = 'block';
+        downloadBtn.disabled = false;
+        loader.style.display = 'none';
+        finalizeDownload(blob);
+      };
       recorder.onerror = () => alert("Recording failed. Please try again.");
-
       recorder.start(100);
+
+      videoElement.play();
       processing = true;
+      let frameCounter = 0;
 
-      // Process frames with optimization
       (async function processFrame() {
-        if (!processing) return;
-
-        const currentTime = frameCount * frameInterval;
-        if (currentTime >= duration) {
+        if (!processing || videoElement.ended) {
           recorder.stop();
-          loader.style.display = 'none';
           return;
         }
 
-        videoElement.currentTime = currentTime;
-        await new Promise(resolve => {
-          videoElement.onseeked = () => resolve();
-          videoElement.onerror = () => resolve();
-        });
-
-        ctx.clearRect(0, 0, targetWidth, targetHeight);
         ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-        const predictions = await model.estimateFaces(videoElement, false, true);
-        faceCount.textContent = predictions.length;
+        // Detect faces every 5 frames for speed
+        if (frameCounter % 5 === 0) {
+          lastPredictions = await model.estimateFaces(videoElement, false, true);
+          faceCount.textContent = lastPredictions.length;
+        }
 
-        predictions.forEach(pred => {
+        lastPredictions.forEach(pred => {
           const [x, y, width, height] = [
             pred.topLeft[0],
             pred.topLeft[1],
@@ -319,11 +325,11 @@
           ctx.restore();
         });
 
-        frameCount++;
-        const progressPercent = Math.min((currentTime / duration) * 100, 100);
+        const progressPercent = (videoElement.currentTime / videoElement.duration) * 100;
         progress.textContent = `${progressPercent.toFixed(1)}%`;
         progressBar.style.width = `${progressPercent}%`;
 
+        frameCounter++;
         requestAnimationFrame(processFrame);
       })();
     });
@@ -334,21 +340,25 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `blurred-video-${Date.now()}_4K.webm`;
+        a.download = `blurred-video-${Date.now()}.webm`;
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        downloadBtn.disabled = false;
       } catch (error) {
         console.error("Download failed:", error);
         alert("Download failed. Please try again or use a different browser.");
-        downloadBtn.disabled = false;
       }
     }
 
     downloadBtn.addEventListener('click', () => {
-      // Button only enabled after processing
+      const url = outputVideo.src;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `blurred-video-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     });
 
     function stopProcessing() {
