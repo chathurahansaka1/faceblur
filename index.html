@@ -1,260 +1,474 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FaceGuard AI Anonymizer</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CyberBlur: AI Face Anonymizer</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #2bff6c;
-      --secondary: #0a1f12;
-      --background: #041a0a;
-      --text: #e0ffe6;
+      --primary-neon: #00ff87;
+      --secondary-neon: #0cffd4;
+      --background-dark: #0a0a1a;
+      --accent-dark: #1a1a2e;
+      --text-glow: rgba(0, 255, 135, 0.7);
     }
 
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
-      font-family: 'Segoe UI', sans-serif;
     }
 
     body {
-      background: linear-gradient(135deg, var(--background), #000);
+      font-family: 'Orbitron', sans-serif;
+      background: linear-gradient(135deg, var(--background-dark) 0%, #111 100%);
+      color: var(--primary-neon);
+      line-height: 1.6;
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      color: var(--text);
+      perspective: 1000px;
     }
 
-    .container {
-      background: rgba(16, 233, 86, 0.05);
-      border: 2px solid var(--primary);
+    .cyber-container {
+      background: rgba(26, 26, 46, 0.8);
+      border: 2px solid var(--primary-neon);
       border-radius: 15px;
-      padding: 2rem;
-      width: 95%;
+      padding: 30px;
+      width: 100%;
       max-width: 600px;
-      box-shadow: 0 0 30px rgba(43, 255, 108, 0.2);
+      box-shadow: 
+        0 0 20px rgba(0, 255, 135, 0.3),
+        0 0 50px rgba(0, 255, 135, 0.2);
+      backdrop-filter: blur(10px);
+      transform: rotateX(10deg);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
     }
 
-    .upload-section {
-      border: 2px dashed var(--primary);
-      padding: 2rem;
+    .cyber-container:hover {
+      transform: rotateX(0deg) scale(1.02);
+      box-shadow: 
+        0 0 30px rgba(0, 255, 135, 0.5),
+        0 0 60px rgba(0, 255, 135, 0.3);
+    }
+
+    .cyber-container::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(45deg, 
+        transparent 20%, 
+        var(--primary-neon) 50%, 
+        transparent 80%);
+      animation: scan 4s linear infinite;
+      opacity: 0.1;
+    }
+
+    @keyframes scan {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+
+    .title {
       text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      text-shadow: 
+        0 0 10px var(--text-glow),
+        0 0 20px var(--text-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.02); opacity: 0.8; }
+    }
+
+    .cyber-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      appearance: none;
+      background: var(--accent-dark);
+      outline: none;
+      opacity: 0.7;
+      transition: opacity 0.2s;
       border-radius: 10px;
-      margin-bottom: 1.5rem;
-      transition: all 0.3s;
+      height: 10px;
     }
 
-    .upload-section:hover {
-      background: rgba(43, 255, 108, 0.05);
+    input[type="range"]:hover {
+      opacity: 1;
     }
 
-    #videoInput {
-      display: none;
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: var(--primary-neon);
+      cursor: pointer;
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--primary-neon);
     }
 
-    .custom-upload-btn {
-      background: var(--primary);
-      color: var(--secondary);
-      padding: 12px 30px;
+    .cyber-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .cyber-btn {
+      background: var(--primary-neon);
+      color: var(--background-dark);
+      border: none;
+      padding: 12px 25px;
       border-radius: 8px;
       cursor: pointer;
-      font-weight: bold;
-      transition: transform 0.3s;
-      display: inline-block;
-      margin-top: 1rem;
+      font-family: 'Orbitron', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+      box-shadow: 0 0 15px var(--primary-neon);
     }
 
-    .processing-info {
-      margin-top: 1.5rem;
-      display: none;
+    .cyber-btn:hover {
+      background: var(--secondary-neon);
+      transform: scale(1.05);
+      box-shadow: 0 0 25px var(--secondary-neon);
+    }
+
+    .cyber-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .cyber-stats {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: var(--secondary-neon);
+    }
+
+    .progress-container {
+      width: 100%;
+      background: var(--accent-dark);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 15px;
     }
 
     .progress-bar {
       height: 10px;
-      background: rgba(43, 255, 108, 0.2);
-      border-radius: 5px;
-      overflow: hidden;
-      margin: 1rem 0;
-    }
-
-    .progress {
-      height: 100%;
-      background: var(--primary);
+      background: linear-gradient(to right, var(--primary-neon), var(--secondary-neon));
       width: 0%;
-      transition: width 0.3s;
+      transition: width 0.5s ease;
+      position: relative;
     }
 
-    .stats {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 1rem;
-      font-size: 0.9rem;
+    .progress-bar::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255,255,255,0.2) 50%, 
+        transparent 100%);
+      animation: scan 2s linear infinite;
     }
 
-    #outputCanvas {
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary-neon);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
       display: none;
     }
 
-    @media (max-width: 480px) {
-      .container {
-        padding: 1rem;
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 600px) {
+      .cyber-container {
+        margin: 10px;
+        padding: 15px;
       }
-      .custom-upload-btn {
+      .title {
+        font-size: 1.8rem;
+      }
+      .cyber-btn {
         padding: 10px 20px;
+        font-size: 0.9rem;
       }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="upload-section">
-      <h2>වීඩියෝ ගොනුව තෝරන්න</h2>
-      <label class="custom-upload-btn" for="videoInput">
-        උඩුගත කරන්න
-      </label>
-      <input type="file" id="videoInput" accept="video/*">
-      <p style="margin-top: 1rem; font-size: 0.9rem;">
-        උපරිම ප්රමාණය: 100MB | සහයෝගී ආකෘති: MP4, MOV, AVI
-      </p>
+  <div class="cyber-container">
+    <h1 class="title">CyberBlur: AI Face Anonymizer</h1>
+    
+    <div class="cyber-controls">
+      <div class="slider-container">
+        <label>Blur Intensity: <span id="blurValue">20</span>px</label>
+        <input type="range" id="blurStrength" min="5" max="50" value="20" />
+      </div>
     </div>
 
-    <div class="processing-info">
-      <div class="progress-bar">
-        <div class="progress" id="progressBar"></div>
-      </div>
-      <div class="stats">
-        <div>ප්රගතිය: <span id="progress">0%</span></div>
-        <div>හඳුනාගත් මුහුණු: <span id="faceCount">0</span></div>
-      </div>
+    <div class="cyber-buttons">
+      <label for="videoInput" class="cyber-btn">
+        Upload Video
+      </label>
+      <input type="file" id="videoInput" class="file-input" accept="video/*" />
+      <button id="downloadBtn" class="cyber-btn" disabled>Download Video</button>
+    </div>
+
+    <div class="loader" id="loader"></div>
+
+    <div class="progress-container">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="cyber-stats">
+      <div>Processing: <span id="progress">0%</span></div>
+      <div>Detected Faces: <span id="faceCount">0</span></div>
+      <div>Quality: 1080p (HD)</div>
     </div>
   </div>
 
-  <canvas id="outputCanvas"></canvas>
-
   <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
     const videoInput = document.getElementById('videoInput');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progress');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const progress = document.getElementById('progress');
     const faceCount = document.getElementById('faceCount');
-    const processingInfo = document.querySelector('.processing-info');
+    const loader = document.getElementById('loader');
+    const blurStrength = document.getElementById('blurStrength');
+    const blurValue = document.getElementById('blurValue');
+    const progressBar = document.getElementById('progressBar');
+    const outputCanvas = document.createElement('canvas');
+    document.body.appendChild(outputCanvas);
 
     let model;
     let mediaRecorder;
     let recordedChunks = [];
+    let processing = false;
+    let currentBlur = 20;
 
-    // AI ආකෘතිය පූරණය කිරීම
-    async function initializeModel() {
+    // Load Blazeface model
+    async function loadModel() {
+      loader.style.display = 'block';
       try {
         model = await blazeface.load();
-        console.log('AI ආකෘතිය සාර්ථකව පූරණය විය!');
+        console.log("Model loaded!");
+        loader.style.display = 'none';
       } catch (error) {
-        console.error('ආකෘති පූරණයේ දෝෂය:', error);
-        alert('AI ආකෘතිය පූරණය කිරීමට නොහැකි විය. පිටුව නැවුම් කරන්න.');
+        console.error("Model load failed:", error);
+        alert("Error loading model. Check console.");
+        loader.style.display = 'none';
       }
     }
+    loadModel();
 
-    // වීඩියෝ සැකසුම් ක්රියාවලිය
-    async function processVideo(videoFile) {
+    // Blur strength update
+    blurStrength.addEventListener('input', () => {
+      currentBlur = blurStrength.value;
+      blurValue.textContent = currentBlur;
+    });
+
+    // Process video automatically on upload
+    videoInput.addEventListener('change', async () => {
+      if (!model) return alert("Model not loaded!");
+      
+      const videoFile = videoInput.files[0];
+      if (!videoFile) return;
+
+      loader.style.display = 'block';
+      downloadBtn.disabled = true;
+      recordedChunks = [];
+
       const videoUrl = URL.createObjectURL(videoFile);
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
       
-      await new Promise((resolve) => {
+      await new Promise(resolve => {
         videoElement.onloadedmetadata = resolve;
       });
 
-      const canvas = document.getElementById('outputCanvas');
-      canvas.width = videoElement.videoWidth;
-      canvas.height = videoElement.videoHeight;
-      const ctx = canvas.getContext('2d');
+      // High quality settings
+      outputCanvas.width = videoElement.videoWidth;
+      outputCanvas.height = videoElement.videoHeight;
+      const bitRate = 5000000; // 5 Mbps for HD quality
 
-      // MediaRecorder සැකසුම
-      const stream = canvas.captureStream(25);
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm; codecs=vp9'
+      // Setup media recorder
+      const canvasStream = outputCanvas.captureStream(30);
+      const audioStream = await getAudioStream(videoElement);
+      if(audioStream) canvasStream.addTrack(audioStream);
+
+      mediaRecorder = new MediaRecorder(canvasStream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: bitRate
       });
 
-      mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-      mediaRecorder.start();
+      mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const mp4Blob = convertWebMToMP4(blob);
+        downloadBtn.disabled = false;
+      };
 
-      // ප්රධාන සැකසුම් ලූපය
-      videoElement.play();
-      let lastTime = 0;
+      mediaRecorder.start(100);
 
-      async function processFrame() {
-        const currentTime = videoElement.currentTime;
-        ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+      // Start processing
+      processing = true;
+      const startTime = Date.now();
+      const totalDuration = videoElement.duration * 1000;
 
-        // මුහුණු හඳුනාගැනීම
+      (async function processFrame() {
+        if (!processing) return;
+
+        const currentTime = Date.now() - startTime;
+        videoElement.currentTime = currentTime / 1000;
+        
+        await new Promise(resolve => {
+          videoElement.onseeked = resolve;
+        });
+
+        const ctx = outputCanvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, outputCanvas.width, outputCanvas.height);
+
+        // Face detection and blur
         const predictions = await model.estimateFaces(videoElement);
         faceCount.textContent = predictions.length;
 
-        predictions.forEach((prediction) => {
+        predictions.forEach(pred => {
           const [x, y, width, height] = [
-            prediction.topLeft[0],
-            prediction.topLeft[1], 
-            prediction.bottomRight[0] - prediction.topLeft[0],
-            prediction.bottomRight[1] - prediction.topLeft[1]
+            pred.topLeft[0],
+            pred.topLeft[1],
+            pred.bottomRight[0] - pred.topLeft[0],
+            pred.bottomRight[1] - pred.topLeft[1]
           ];
 
           ctx.save();
           ctx.beginPath();
           ctx.rect(x, y, width, height);
           ctx.clip();
-          ctx.filter = 'blur(15px)';
-          ctx.drawImage(canvas, x, y, width, height, x, y, width, height);
+          ctx.filter = `blur(${currentBlur}px)`;
+          ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
           ctx.restore();
         });
 
-        // ප්රගතිය යාවත්කාලීන කිරීම
-        const progress = (currentTime / videoElement.duration) * 100;
-        progressBar.style.width = `${progress}%`;
-        progressText.textContent = `${progress.toFixed(1)}%`;
+        // Update progress
+        const progressPercent = (currentTime / totalDuration) * 100;
+        progress.textContent = `${progressPercent.toFixed(1)}%`;
+        progressBar.style.width = `${progressPercent}%`;
 
-        if (!videoElement.paused && !videoElement.ended) {
+        if (currentTime < totalDuration) {
           requestAnimationFrame(processFrame);
         } else {
-          mediaRecorder.stop();
+          stopProcessing();
         }
-      }
+      })();
 
-      videoElement.addEventListener('play', processFrame);
-    }
-
-    // Event Listeners
-    videoInput.addEventListener('change', async (e) => {
-      if (!model) {
-        alert('කරුණාකර AI ආකෘතිය පූරණය වන තෙක් රැඳී සිටින්න');
-        return;
-      }
-
-      const file = e.target.files[0];
-      if (!file) return;
-
-      processingInfo.style.display = 'block';
-      await processVideo(file);
+      loader.style.display = 'none';
     });
 
-    // ප්රතිඵල බාගත කිරීම
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `anonymized-${Date.now()}.webm`;
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+    // Get audio stream
+    async function getAudioStream(videoElement) {
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaElementSource(videoElement);
+        const destination = audioContext.createMediaStreamDestination();
+        source.connect(destination);
+        return destination.stream.getAudioTracks()[0];
+      } catch {
+        return null;
+      }
+    }
 
-    // ආරම්භක පිහිටුවීම්
-    initializeModel();
+    // Convert WebM to MP4 (requires FFmpeg.wasm)
+    async function convertWebMToMP4(webmBlob) {
+      loader.style.display = 'block';
+      try {
+        await ffmpeg.load();
+        ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
+        await ffmpeg.run('-i', 'input.webm', '-c', 'copy', 'output.mp4');
+        const data = ffmpeg.FS('readFile', 'output.mp4');
+        return new Blob([data.buffer], { type: 'video/mp4' });
+      } catch (error) {
+        console.error('Conversion error:', error);
+        alert('Error converting video. Check console.');
+        return null;
+      } finally {
+        loader.style.display = 'none';
+      }
+    }
+
+    // Download handler
+    downloadBtn.addEventListener('click', async () => {
+      loader.style.display = 'block';
+      downloadBtn.disabled = true;
+      
+      try {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const mp4Blob = await convertWebMToMP4(blob);
+        
+        if (mp4Blob) {
+          const url = URL.createObjectURL(mp4Blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `cyberblur-${Date.now()}.mp4`;
+          document.body.appendChild(a);
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      } catch (error) {
+        console.error('Download error:', error);
+        alert('Error downloading video. Check console.');
+      } finally {
+        loader.style.display = 'none';
+        downloadBtn.disabled = false;
+      }
+    });
+
+    function stopProcessing() {
+      processing = false;
+      mediaRecorder.stop();
+    }
   </script>
 </body>
 </html>
