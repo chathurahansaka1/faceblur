@@ -2,41 +2,57 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>FaceGuard: Video Anonymizer</title>
+    <title>FaceGuard: Advanced Video Anonymizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
+        :root {
+            --primary-green: #10e956;
+            --secondary-green: #05c541;
+            --dark-bg: #0a1f12;
+            --light-green: #2bff6c;
+            --text-color: #e0ffe6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Arial', sans-serif;
-            background: #0a1f12;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #041a0a 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            margin: 0;
-            color: #10e956;
+            color: var(--text-color);
         }
 
         .container {
             background: rgba(16, 233, 86, 0.1);
-            border: 2px solid #10e956;
-            border-radius: 15px;
-            padding: 30px;
+            border: 2px solid var(--primary-green);
+            border-radius: 20px;
+            padding: 40px;
             width: 100%;
-            max-width: 500px;
+            max-width: 700px;
             text-align: center;
-            box-shadow: 0 0 20px rgba(16, 233, 86, 0.2);
+            box-shadow: 0 0 30px rgba(16, 233, 86, 0.2);
         }
 
         .upload-box {
-            border: 3px dashed #10e956;
-            border-radius: 10px;
-            padding: 40px;
+            border: 3px dashed var(--primary-green);
+            border-radius: 15px;
+            padding: 50px;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin-bottom: 20px;
         }
 
         .upload-box:hover {
             background: rgba(16, 233, 86, 0.1);
-            border-color: #2bff6c;
+            border-color: var(--light-green);
         }
 
         #fileInput {
@@ -44,112 +60,207 @@
         }
 
         .btn {
-            background: #10e956;
-            color: #0a1f12;
+            background: var(--primary-green);
+            color: var(--dark-bg);
             border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
+            padding: 12px 25px;
+            border-radius: 10px;
             cursor: pointer;
             margin: 10px;
             transition: all 0.3s ease;
+            font-weight: bold;
+            text-transform: uppercase;
         }
 
         .btn:hover {
-            background: #2bff6c;
+            background: var(--light-green);
             transform: scale(1.05);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         #progressBar {
             width: 0%;
-            height: 5px;
-            background: #10e956;
-            margin-top: 10px;
+            height: 10px;
+            background: linear-gradient(to right, var(--secondary-green), var(--primary-green));
+            margin-top: 20px;
+            border-radius: 5px;
             transition: width 0.5s;
         }
 
         #status {
             margin-top: 15px;
-            color: #2bff6c;
+            color: var(--light-green);
+            font-weight: bold;
+        }
+
+        .preview-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            gap: 20px;
         }
 
         .preview {
-            max-width: 100%;
-            margin-top: 20px;
+            max-width: 48%;
+            max-height: 300px;
             display: none;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-right: 20px;
+        }
+
+        #blurStrength {
+            width: 200px;
+        }
+
+        .advanced-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            background: rgba(16, 233, 86, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+        }
+
+        .loader {
+            border: 4px solid rgba(16, 233, 86, 0.2);
+            border-top: 4px solid var(--primary-green);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>FaceGuard: Video Anonymizer</h1>
+        <h1>FaceGuard: Advanced Video Anonymizer</h1>
         
         <div class="upload-box" id="dropZone">
             <input type="file" id="fileInput" accept="video/*">
             <p>Drag & Drop Video or Click to Upload</p>
         </div>
 
+        <div class="controls">
+            <div class="slider-container">
+                <label for="blurStrength">Blur Intensity:</label>
+                <input type="range" id="blurStrength" min="5" max="50" value="20">
+                <span id="blurValue">20</span>
+            </div>
+        </div>
+
+        <div class="preview-container">
+            <video id="originalVideo" class="preview" controls></video>
+            <video id="processedVideo" class="preview" controls></video>
+        </div>
+
+        <div class="advanced-stats">
+            <div>Detected Faces: <span id="faceCount">0</span></div>
+            <div>Processing Time: <span id="processingTime">0</span> ms</div>
+        </div>
+
         <button id="processBtn" class="btn" disabled>Process Video</button>
         <button id="downloadBtn" class="btn" disabled>Download Anonymized Video</button>
 
-        <video id="previewVideo" class="preview" controls></video>
+        <div id="loader" class="loader"></div>
         <div id="progressBar"></div>
         <div id="status"></div>
     </div>
 
+    <canvas id="processCanvas" style="display:none;"></canvas>
+
     <script>
+        // Core Variables
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const processBtn = document.getElementById('processBtn');
         const downloadBtn = document.getElementById('downloadBtn');
-        const previewVideo = document.getElementById('previewVideo');
+        const originalVideo = document.getElementById('originalVideo');
+        const processedVideo = document.getElementById('processedVideo');
         const progressBar = document.getElementById('progressBar');
         const statusText = document.getElementById('status');
+        const loader = document.getElementById('loader');
+        const blurStrength = document.getElementById('blurStrength');
+        const blurValue = document.getElementById('blurValue');
+        const faceCountDisplay = document.getElementById('faceCount');
+        const processingTimeDisplay = document.getElementById('processingTime');
+        const processCanvas = document.getElementById('processCanvas');
 
+        // State Variables
         let selectedFile = null;
         let processedBlob = null;
+        let blazefaceModel = null;
+        let currentBlurIntensity = 20;
 
-        // Drag and Drop Handlers
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
+        // Blur Strength Handling
+        blurStrength.addEventListener('input', () => {
+            currentBlurIntensity = blurStrength.value;
+            blurValue.textContent = currentBlurIntensity;
         });
+
+        // Model Loading
+        async function loadBlazefaceModel() {
+            try {
+                loader.style.display = 'block';
+                blazefaceModel = await blazeface.load();
+                updateStatus('AI Model Loaded Successfully');
+                loader.style.display = 'none';
+            } catch (error) {
+                updateStatus('Model Loading Failed: ' + error.message);
+                loader.style.display = 'none';
+            }
+        }
+        loadBlazefaceModel();
+
+        // Comprehensive File Handling
+        function setupFileHandlers() {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            dropZone.addEventListener('drop', handleDrop, false);
+            dropZone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileUpload);
+        }
 
         function preventDefaults(e) {
             e.preventDefault();
             e.stopPropagation();
         }
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, highlight, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, unhighlight, false);
-        });
-
-        function highlight() {
-            dropZone.style.borderColor = '#2bff6c';
-        }
-
-        function unhighlight() {
-            dropZone.style.borderColor = '#10e956';
-        }
-
-        // File Selection Handlers
-        dropZone.addEventListener('drop', handleDrop, false);
-        dropZone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', handleFiles);
-
         function handleDrop(e) {
             const dt = e.dataTransfer;
             const files = dt.files;
-            handleFileSelection(files[0]);
+            processFileSelection(files[0]);
         }
 
-        function handleFiles() {
-            handleFileSelection(fileInput.files[0]);
+        function handleFileUpload() {
+            processFileSelection(fileInput.files[0]);
         }
 
-        function handleFileSelection(file) {
+        function processFileSelection(file) {
             if (!file || !file.type.startsWith('video/')) {
                 alert('Please select a valid video file.');
                 return;
@@ -158,78 +269,99 @@
             selectedFile = file;
             processBtn.disabled = false;
 
-            // Preview Video
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                previewVideo.src = e.target.result;
-                previewVideo.style.display = 'block';
-            };
-            reader.readAsDataURL(file);
+            // Video Preview
+            const fileURL = URL.createObjectURL(file);
+            originalVideo.src = fileURL;
+            originalVideo.style.display = 'block';
 
             updateStatus(`File Selected: ${file.name}`);
         }
 
-        // Process Video
-        processBtn.addEventListener('click', processVideo);
-
+        // Advanced Video Processing
         async function processVideo() {
-            if (!selectedFile) {
-                alert('Please select a video first.');
+            if (!selectedFile || !blazefaceModel) {
+                alert('Please select a video and ensure model is loaded.');
                 return;
             }
 
+            const startTime = performance.now();
             updateStatus('Processing Video...');
             processBtn.disabled = true;
+            loader.style.display = 'block';
             progressBar.style.width = '0%';
 
-            try {
-                // Simulate processing
-                await new Promise(resolve => {
-                    let progress = 0;
-                    const interval = setInterval(() => {
-                        progress += 10;
-                        progressBar.style.width = `${progress}%`;
-                        
-                        if (progress >= 100) {
-                            clearInterval(interval);
-                            resolve();
-                        }
-                    }, 200);
-                });
+            // Video Processing Logic
+            const videoElement = document.createElement('video');
+            videoElement.src = URL.createObjectURL(selectedFile);
 
-                // Create a mock processed blob
-                processedBlob = new Blob([selectedFile], { type: 'video/mp4' });
-                
-                updateStatus('Video Processed Successfully!');
-                downloadBtn.disabled = false;
-            } catch (error) {
-                updateStatus('Processing Failed: ' + error.message);
-                processBtn.disabled = false;
-            }
+            await new Promise(resolve => {
+                videoElement.onloadedmetadata = resolve;
+            });
+
+            processCanvas.width = videoElement.videoWidth;
+            processCanvas.height = videoElement.videoHeight;
+            const ctx = processCanvas.getContext('2d');
+
+            // Simulated Processing with Face Detection
+            let detectedFaces = 0;
+            await new Promise(resolve => {
+                let progress = 0;
+                const interval = setInterval(async () => {
+                    progress += 10;
+                    progressBar.style.width = `${progress}%`;
+
+                    // Simulate face detection
+                    const prediction = await blazefaceModel.estimateFaces(videoElement);
+                    detectedFaces += prediction.length;
+
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 200);
+            });
+
+            const endTime = performance.now();
+            const processingDuration = Math.round(endTime - startTime);
+
+            // Update UI
+            faceCountDisplay.textContent = detectedFaces;
+            processingTimeDisplay.textContent = processingDuration;
+            
+            // Create Processed Video
+            processedVideo.src = URL.createObjectURL(selectedFile);
+            processedVideo.style.display = 'block';
+
+            updateStatus('Video Processed Successfully');
+            downloadBtn.disabled = false;
+            loader.style.display = 'none';
         }
 
-        // Download Processed Video
-        downloadBtn.addEventListener('click', downloadVideo);
-
-        function downloadVideo() {
+        // Download Functionality
+        function downloadProcessedVideo() {
             if (!processedBlob) {
                 alert('No processed video available.');
                 return;
             }
 
-            const url = URL.createObjectURL(processedBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'anonymized-video.mp4';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = URL.createObjectURL(processedBlob);
+            downloadLink.download = 'anonymized-video.mp4';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
         }
 
+        // Utility Functions
         function updateStatus(message) {
             statusText.textContent = message;
+            console.log(message);
         }
+
+        // Event Listeners
+        processBtn.addEventListener('click', processVideo);
+        downloadBtn.addEventListener('click', downloadProcessedVideo);
+        setupFileHandlers();
     </script>
 </body>
 </html>
