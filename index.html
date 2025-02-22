@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Face Blur Tool</title>
+    <script src="https://trackingjs.com/build/tracking-min.js"></script>
+    <script src="https://trackingjs.com/build/data/face-min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stackblur-canvas@1.4.1/dist/stackblur.min.js"></script>
+</head>
+<body>
+    <h1>Video Face Blur Tool</h1>
+    <input type="file" id="videoInput" accept="video/*">
+    <br><br>
+    <video id="inputVideo" controls width="600"></video>
+    <br>
+    <button onclick="processVideo()" style="padding: 10px; margin: 5px;">Process Video</button>
+    <a id="downloadLink" style="display: none; padding: 10px; background: #4CAF50; color: white; text-decoration: none;">Download Blurred Video</a>
+
+    <script>
+        const videoInput = document.getElementById('videoInput');
+        const inputVideo = document.getElementById('inputVideo');
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        // වීඩියෝ ගොනුව තෝරාගත් විට
+        videoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const url = URL.createObjectURL(file);
+            inputVideo.src = url;
+        });
+
+        // වීඩියෝව process කිරීම
+        function processVideo() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const tracker = new tracking.ObjectTracker('face');
+            tracker.setInitialScale(4);
+            tracker.setStepSize(2);
+            tracker.setEdgesDensity(0.1);
+
+            inputVideo.addEventListener('loadedmetadata', function() {
+                canvas.width = inputVideo.videoWidth;
+                canvas.height = inputVideo.videoHeight;
+
+                // MediaRecorder සකසන්න
+                const stream = canvas.captureStream();
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                recordedChunks = [];
+
+                mediaRecorder.ondataavailable = function(e) {
+                    if (e.data.size > 0) recordedChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.getElementById('downloadLink');
+                    a.href = url;
+                    a.download = 'blurred-video.webm';
+                    a.style.display = 'inline-block';
+                };
+
+                mediaRecorder.start();
+
+                // ප්රේම් process කිරීම
+                inputVideo.play();
+                let lastTime = 0;
+
+                const processFrame = () => {
+                    if (inputVideo.paused || inputVideo.ended) {
+                        mediaRecorder.stop();
+                        return;
+                    }
+
+                    ctx.drawImage(inputVideo, 0, 0, canvas.width, canvas.height);
+
+                    // මුහුණු හඳුනාගැනීම
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const gray = tracking.Image.grayscale(imageData.data, canvas.width, canvas.height);
+                    const faces = tracker.track(gray, canvas.width, canvas.height);
+
+                    // එක් එක් මුහුණ blur කිරීම
+                    faces.forEach(face => {
+                        const [x, y, w, h] = face;
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = w;
+                        tempCanvas.height = h;
+                        const tempCtx = tempCanvas.getContext('2d');
+                        tempCtx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
+                        StackBlur.canvasRGBA(tempCanvas, 0, 0, w, h, 15);
+                        ctx.drawImage(tempCanvas, x, y);
+                    });
+
+                    requestAnimationFrame(processFrame);
+                };
+
+                requestAnimationFrame(processFrame);
+            });
+        }
+    </script>
+</body>
+</html>
