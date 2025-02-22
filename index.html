@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
+        /* Previous CSS remains the same */
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -179,11 +180,10 @@
 
     <script>
         let model;
-        let videoDecoder;
-        let videoEncoder;
         let isProcessing = false;
-        let processedFrames = [];
+        let processedChunks = [];
         
+        // Get DOM elements
         const status = document.getElementById('status');
         const error = document.getElementById('error');
         const videoInput = document.getElementById('videoInput');
@@ -195,8 +195,9 @@
         const speedStat = document.getElementById('speedStat');
         const facesStat = document.getElementById('facesStat');
         const qualityStat = document.getElementById('qualityStat');
+        const blurLevel = document.getElementById('blurLevel');
 
-        // Quality settings
+        // Quality settings mapping
         const qualitySettings = {
             1: { label: 'Low', bitrate: 2_500_000 },
             2: { label: 'Medium', bitrate: 5_000_000 },
@@ -205,6 +206,7 @@
             5: { label: 'Ultra', bitrate: 16_000_000 }
         };
 
+        // Update quality label on change
         document.getElementById('quality').addEventListener('input', (e) => {
             const quality = qualitySettings[e.target.value];
             document.getElementById('qualityValue').textContent = quality.label;
@@ -218,11 +220,11 @@
                 status.textContent = 'Model loaded - Ready to process';
                 error.style.display = 'none';
             } catch (e) {
-                showError('Failed to load face detection model. Please refresh the page.');
+                showError('Failed to load face detection model: ' + e.message);
             }
         }
-        loadModel();
 
+        // Show error message
         function showError(message) {
             error.textContent = message;
             error.style.display = 'block';
@@ -245,44 +247,62 @@
                 status.textContent = 'Video loaded - Ready to process';
                 error.style.display = 'none';
                 
-                // Reset progress
                 progressBar.style.width = '0%';
                 progressText.textContent = '0%';
             } catch (e) {
-                showError('Error loading video. Please try another file.');
+                showError('Error loading video: ' + e.message);
             }
         });
 
-        // Initialize WebCodec components
-        async function initializeCodecs(width, height, frameRate) {
-            const quality = parseInt(document.getElementById('quality').value);
-            const config = {
-                codec: 'vp09.00.10.08',
-                width,
-                height,
-                bitrate: qualitySettings[quality].bitrate,
-                framerate: frameRate
-            };
+        // Process video frames
+        async function processFrame(frame, encoder) {
+            const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
+            const ctx = canvas.getContext('2d');
+            
+            // Draw the frame
+            ctx.drawImage(frame, 0, 0);
+            
+            try {
+                // Detect faces
+                const predictions = await model.estimateFaces(canvas, false);
+                facesStat.textContent = predictions.length;
 
-            videoDecoder = new VideoDecoder({
-                output: async frame => {
-                    await processFrame(frame);
-                },
-                error: e => showError(`Decoder error: ${e.message}`)
-            });
+                // Apply blur to each face
+                const blurStrength = blurLevel.value;
+                for (const pred of predictions) {
+                    const x = pred.topLeft[0];
+                    const y = pred.topLeft[1];
+                    const width = pred.bottomRight[0] - x;
+                    const height = pred.bottomRight[1] - y;
 
-            videoEncoder = new VideoEncoder({
-                output: chunk => {
-                    processedFrames.push(chunk);
-                },
-                error: e => showError(`Encoder error: ${e.message}`)
-            });
+                    // Apply blur effect
+                    ctx.save();
+                    ctx.filter = `blur(${blurStrength}px)`;
+                    ctx.drawImage(
+                        canvas, 
+                        x, y, width, height,
+                        x, y, width, height
+                    );
+                    ctx.restore();
+                }
 
-            await videoDecoder.configure(config);
-            await videoEncoder.configure(config);
+                // Create and encode new frame
+                const newFrame = new VideoFrame(canvas, {
+                    timestamp: frame.timestamp,
+                    duration: frame.duration
+                });
+                
+                encoder.encode(newFrame);
+                newFrame.close();
+                
+            } catch (e) {
+                console.error('Frame processing error:', e);
+            } finally {
+                frame.close();
+            }
         }
 
-        // Process video using WebCodecs
+        // Main video processing function
         async function processVideo() {
             if (!model || isProcessing) return;
             
@@ -291,121 +311,79 @@
                 processBtn.disabled = true;
                 status.textContent = 'Processing video...';
                 error.style.display = 'none';
-                processedFrames = [];
+                processedChunks = [];
 
+                const quality = parseInt(document.getElementById('quality').value);
                 const stream = videoPreview.captureStream();
                 const videoTrack = stream.getVideoTracks()[0];
-                const trackProcessor = new MediaStreamTrackProcessor(videoTrack);
-                const frameStream = trackProcessor.readable;
+                const processor = new MediaStreamTrackProcessor(videoTrack);
+                const frameStream = processor.readable;
 
-                await initializeCodecs(
-                    videoPreview.videoWidth,
-                    videoPreview.videoHeight,
-                    30
-                );
+                // Create encoder
+                const encoder = new VideoEncoder({
+                    output: chunk => processedChunks.push(chunk),
+                    error: e => showError('Encoder error: ' + e.message)
+                });
+
+                // Configure encoder
+                await encoder.configure({
+                    codec: 'vp8',
+                    width: videoPreview.videoWidth,
+                    height: videoPreview.videoHeight,
+                    bitrate: qualitySettings[quality].bitrate
+                });
 
                 const reader = frameStream.getReader();
-                let frameCount = 0;
                 const startTime = performance.now();
-
+                let frameCount = 0;
+                
                 while (true) {
                     const {value, done} = await reader.read();
                     if (done) break;
-
-                    const frame = value;
-                    await videoDecoder.decode(frame);
+                    
+                    await processFrame(value, encoder);
                     frameCount++;
-
-                    // Update stats
+                    
+                    // Update stats and progress
                     const elapsed = (performance.now() - startTime) / 1000;
                     speedStat.textContent = `${Math.round(frameCount / elapsed)} fps`;
                     
-                    // Update progress
                     const progress = (frameCount / (videoPreview.duration * 30)) * 100;
                     progressBar.style.width = `${Math.min(progress, 100)}%`;
                     progressText.textContent = `${Math.min(Math.round(progress), 100)}%`;
                 }
 
-                await finishProcessing();
-
+                // Finish processing
+                await encoder.flush();
+                const blob = new Blob(processedChunks, { type: 'video/webm' });
+                videoPreview.src = URL.createObjectURL(blob);
+                
+                downloadBtn.disabled = false;
+                status.textContent = 'Processing complete!';
+                
             } catch (e) {
-                showError('Error processing video. Please try again.');
+                showError('Processing error: ' + e.message);
                 console.error('Processing error:', e);
+            } finally {
                 isProcessing = false;
                 processBtn.disabled = false;
             }
         }
 
-        // Process individual frames
-        async function processFrame(frame) {
-            const canvas = new OffscreenCanvas(frame.width, frame.height);
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(frame, 0, 0);
-
-            // Detect faces
-            const predictions = await model.estimateFaces(canvas, false);
-            facesStat.textContent = predictions.length;
-
-            // Apply blur effect
-            const blurStrength = document.getElementById('blurLevel').value;
-            predictions.forEach(pred => {
-                const x = pred.topLeft[0];
-                const y = pred.topLeft[1];
-                const width = pred.bottomRight[0] - x;
-                const height = pred.bottomRight[1] - y;
-
-                ctx.save();
-                ctx.filter = `blur(${blurStrength}px)`;
-                ctx.drawImage(
-                    canvas, 
-                    x, y, width, height,
-                    x, y, width, height
-                );
-                ctx.restore();
-            });
-
-            // Encode processed frame
-            const newFrame = new VideoFrame(canvas, {
-                timestamp: frame.timestamp,
-                duration: frame.duration
-            });
-            await videoEncoder.encode(newFrame);
-            newFrame.close();
-            frame.close();
-        }
-
-        // Finish processing and prepare download
-        async function finishProcessing() {
-            await videoDecoder.flush();
-            await videoEncoder.flush();
-            
-            const blob = new Blob(processedFrames, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            
-            // Preview processed video
-            videoPreview.src = url;
-            
-            downloadBtn.disabled = false;
-            processBtn.disabled = false;
-            isProcessing = false;
-            status.textContent = 'Processing complete!';
-        }
-
-        // Handle process button click
-        processBtn.addEventListener('click', processVideo);
-
-        // Handle download button click
+        // Handle download
         downloadBtn.addEventListener('click', () => {
-            const blob = new Blob(processedFrames, { type: 'video/webm' });
+            const blob = new Blob(processedChunks, { type: 'video/webm' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'blurred-video.webm';
-            document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
+
+        // Initialize
+        processBtn.addEventListener('click', processVideo);
+        loadModel();
     </script>
 </body>
 </html>
