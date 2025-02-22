@@ -21,7 +21,7 @@
         <div class="controls">
             <input type="file" id="videoInput" accept="video/*">
             <button id="processBtn">Start Processing</button>
-            <a id="downloadLink" hidden><button>Download</button></a>
+            <a id="downloadLink" hidden><button>Download MP4</button></a>
         </div>
     </div>
 
@@ -57,15 +57,15 @@
             outputCanvas.width = inputVideo.videoWidth;
             outputCanvas.height = inputVideo.videoHeight;
 
-            // MediaRecorder සකස් කිරීම
+            // MediaRecorder සකස් කිරීම (MP4 ආකෘතියෙන්)
             const stream = outputCanvas.captureStream(30);
             mediaRecorder = new MediaRecorder(stream, { 
-                mimeType: 'video/webm; codecs=vp9' 
+                mimeType: 'video/mp4; codecs=avc1' 
             });
 
             mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
                 downloadLink.href = URL.createObjectURL(blob);
                 downloadLink.hidden = false;
             };
