@@ -7,15 +7,54 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
-        body { margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
-        .container { max-width: 800px; margin: auto; }
-        video, canvas { width: 100%; border: 2px solid #00ff87; border-radius: 8px; }
-        .controls { margin: 20px 0; }
-        button { background: #00ff87; color: #000; border: none; padding: 10px 20px; cursor: pointer; }
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            text-align: center;
+        }
+        video, canvas {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #00ff87;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background: #00ff87;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00cc70;
+        }
+        a {
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            video, canvas {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <h1>Real-Time Face Blur</h1>
         <video id="inputVideo" controls></video>
         <canvas id="outputCanvas"></canvas>
         <div class="controls">
@@ -37,19 +76,19 @@
         let recordedChunks = [];
         let isProcessing = false;
 
-        // මාදිලිය පූරණය කිරීමේ දෝෂ අසාර්ථකත්වය හැසිරවීම
+        // Load Blazeface model
         async function loadModel() {
             try {
                 model = await blazeface.load();
                 console.log("Model loaded successfully!");
             } catch (error) {
                 console.error("Model loading failed:", error);
-                alert("මාදිලිය පූරණය කිරීම අසාර්ථක විය. අන්තර්ජාල සම්බන්ධතාවය පරීක්ෂා කරන්න.");
+                alert("Model loading failed. Please check your internet connection.");
             }
         }
         loadModel();
 
-        // වීඩියෝ ප්‍රමාණය සහ ධාරාව සකස් කිරීම
+        // Handle video file selection
         videoInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             const url = URL.createObjectURL(file);
@@ -64,7 +103,41 @@
             });
         });
 
-        // ප්‍රක්‍රියාකාරක ලූපය
+        // Start processing when the button is clicked
+        processBtn.addEventListener('click', async () => {
+            if (!model) {
+                alert("Model is not loaded yet!");
+                return;
+            }
+
+            isProcessing = true;
+            recordedChunks = [];
+            
+            // Set up MediaRecorder
+            const stream = outputCanvas.captureStream(25);
+            mediaRecorder = new MediaRecorder(stream, { 
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 2500000 
+            });
+
+            mediaRecorder.ondataavailable = (e) => e.data.size > 0 && recordedChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                
+                // Convert WebM to MP4 using FFmpeg.js or similar library
+                // For now, we'll download as WebM
+                downloadLink.href = url;
+                downloadLink.download = `blurred-video-${Date.now()}.webm`;
+                downloadLink.hidden = false;
+            };
+
+            mediaRecorder.start(100);
+            inputVideo.play();
+            processingLoop();
+        });
+
+        // Processing loop for real-time face detection and blurring
         async function processingLoop() {
             if (!isProcessing || inputVideo.paused || inputVideo.ended) {
                 mediaRecorder?.stop();
@@ -75,22 +148,25 @@
             requestAnimationFrame(processingLoop);
         }
 
-        // රාමුව සැකසීම
+        // Process each frame
         async function processFrame() {
             const ctx = outputCanvas.getContext('2d');
             
+            // Draw the video frame onto the canvas
             ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
             
             try {
+                // Detect faces in the frame
                 const predictions = await model.estimateFaces(inputVideo, false);
                 
+                // Blur each detected face
                 predictions.forEach(prediction => {
                     const start = prediction.topLeft;
                     const end = prediction.bottomRight;
                     const width = end[0] - start[0];
                     const height = end[1] - start[1];
 
-                    // බ්ලර් කිරීමේ කොටස
+                    // Apply blur effect
                     ctx.save();
                     ctx.beginPath();
                     ctx.rect(start[0], start[1], width, height);
@@ -104,44 +180,7 @@
             }
         }
 
-        // ප්‍රොසෙසින් ආරම්භ කිරීම
-        processBtn.addEventListener('click', async () => {
-            if (!model) {
-                alert("මාදිලිය තවම පූරණය වී නැත!");
-                return;
-            }
-
-            isProcessing = true;
-            recordedChunks = [];
-            
-            // MediaRecorder සකස් කිරීම
-            const stream = outputCanvas.captureStream(25);
-            mediaRecorder = new MediaRecorder(stream, { 
-                mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 2500000 
-            });
-
-            mediaRecorder.ondataavailable = (e) => e.data.size > 0 && recordedChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                
-                // WebM එක MP4 බවට පරිවර්තනය
-                const ffmpeg = new FFmpeg();
-                // FFmpeg.wasm භාවිතා කර පරිවර්තනය කිරීම අවශ්ය
-                // (මෙම කොටස අමතර ක්රියාවලියක් අවශ්ය)
-                
-                downloadLink.href = url;
-                downloadLink.download = `blurred-video-${Date.now()}.webm`;
-                downloadLink.hidden = false;
-            };
-
-            mediaRecorder.start(100);
-            inputVideo.play();
-            processingLoop();
-        });
-
-        // පause තත්ත්වය හසුරුවීම
+        // Handle pause and end events
         inputVideo.addEventListener('pause', () => isProcessing = false);
         inputVideo.addEventListener('ended', () => isProcessing = false);
     </script>
