@@ -3,275 +3,193 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CyberBlur: AI Face Anonymizer</title>
+  <title>Neon Face Blur</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary-neon: #00ff87;
-      --secondary-neon: #0cffd4;
-      --background-dark: #0a0a1a;
-      --accent-dark: #1a1a2e;
-      --text-glow: rgba(0, 255, 135, 0.7);
+      --neon-red: #ff073a; /* Neon red */
+      --neon-red-glow: #ff073a80; /* Neon red with transparency for glow */
+      --background: #0d0d0d; /* Darker background for contrast */
+      --text-color: #ffffff;
+      --shadow-glow: 0 0 15px var(--neon-red), 0 0 25px var(--neon-red);
     }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
     body {
-      font-family: 'Orbitron', sans-serif;
-      background: linear-gradient(135deg, var(--background-dark) 0%, #111 100%);
-      color: var(--primary-neon);
-      line-height: 1.6;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      perspective: 1000px;
+      margin: 0;
+      padding: 20px;
+      background: var(--background);
+      color: var(--text-color);
+      font-family: 'Arial', sans-serif;
+      overflow-x: hidden;
     }
-
-    .cyber-container {
-      background: rgba(26, 26, 46, 0.8);
-      border: 2px solid var(--primary-neon);
-      border-radius: 15px;
-      padding: 30px;
-      width: 100%;
-      max-width: 600px;
-      box-shadow: 
-        0 0 20px rgba(0, 255, 135, 0.3),
-        0 0 50px rgba(0, 255, 135, 0.2);
-      backdrop-filter: blur(10px);
-      transform: rotateX(10deg);
-      transition: all 0.3s ease;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .cyber-container:hover {
-      transform: rotateX(0deg) scale(1.02);
-      box-shadow: 
-        0 0 30px rgba(0, 255, 135, 0.5),
-        0 0 60px rgba(0, 255, 135, 0.3);
-    }
-
-    .cyber-container::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: linear-gradient(45deg, 
-        transparent 20%, 
-        var(--primary-neon) 50%, 
-        transparent 80%);
-      animation: scan 4s linear infinite;
-      opacity: 0.1;
-    }
-
-    @keyframes scan {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100%); }
-    }
-
-    .title {
+    .container {
+      max-width: 100%;
+      margin: auto;
       text-align: center;
-      font-size: 2.5rem;
-      margin-bottom: 20px;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2.5em;
       text-transform: uppercase;
-      letter-spacing: 3px;
-      text-shadow: 
-        0 0 10px var(--text-glow),
-        0 0 20px var(--text-glow);
-      animation: pulse 2s ease-in-out infinite;
+      color: var(--neon-red);
+      text-shadow: var(--shadow-glow);
+      letter-spacing: 2px;
     }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.02); opacity: 0.8; }
-    }
-
-    .cyber-controls {
+    .controls {
+      margin: 25px 0;
       display: flex;
-      flex-direction: column;
-      gap: 15px;
-      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
     }
-
+    button {
+      background: var(--neon-red);
+      color: var(--background);
+      border: none;
+      padding: 14px 30px;
+      cursor: pointer;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      box-shadow: var(--shadow-glow);
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px var(--neon-red), 0 0 30px var(--neon-red);
+    }
+    button:disabled {
+      background: #555;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .quality-controls {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 25px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 600px;
+      margin: 20px auto;
+      border: 1px solid var(--neon-red-glow);
+      box-shadow: inset 0 0 10px var(--neon-red-glow);
+    }
     .slider-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      margin: 20px 0;
     }
-
     input[type="range"] {
       width: 100%;
-      appearance: none;
-      background: var(--accent-dark);
-      outline: none;
-      opacity: 0.7;
-      transition: opacity 0.2s;
-      border-radius: 10px;
-      height: 10px;
+      accent-color: var(--neon-red);
+      background: rgba(255, 7, 58, 0.2);
+      border-radius: 5px;
     }
-
-    input[type="range"]:hover {
-      opacity: 1;
+    label {
+      font-size: 18px;
+      text-shadow: 0 0 5px var(--neon-red);
     }
-
-    input[type="range"]::-webkit-slider-thumb {
-      appearance: none;
-      width: 20px;
-      height: 20px;
-      background: var(--primary-neon);
-      cursor: pointer;
-      border-radius: 50%;
-      box-shadow: 0 0 10px var(--primary-neon);
+    .stats {
+      margin-top: 25px;
+      font-size: 16px;
+      color: #dddddd;
+      text-shadow: 0 0 5px var(--neon-red-glow);
     }
-
-    .cyber-buttons {
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-      flex-wrap: wrap;
+    #faceCount {
+      color: var(--neon-red);
+      font-weight: bold;
+      text-shadow: var(--shadow-glow);
     }
-
-    .cyber-btn {
-      background: var(--primary-neon);
-      color: var(--background-dark);
-      border: none;
-      padding: 12px 25px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: 'Orbitron', sans-serif;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      transition: all 0.3s ease;
-      box-shadow: 0 0 15px var(--primary-neon);
-    }
-
-    .cyber-btn:hover {
-      background: var(--secondary-neon);
-      transform: scale(1.05);
-      box-shadow: 0 0 25px var(--secondary-neon);
-    }
-
-    .cyber-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
-    }
-
-    .cyber-stats {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 0.9rem;
-      color: var(--secondary-neon);
-    }
-
-    .progress-container {
-      width: 100%;
-      background: var(--accent-dark);
-      border-radius: 10px;
-      overflow: hidden;
-      margin-top: 15px;
-    }
-
-    .progress-bar {
-      height: 10px;
-      background: linear-gradient(to right, var(--primary-neon), var(--secondary-neon));
-      width: 0%;
-      transition: width 0.5s ease;
-      position: relative;
-    }
-
-    .progress-bar::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, 
-        transparent 0%, 
-        rgba(255,255,255,0.2) 50%, 
-        transparent 100%);
-      animation: scan 2s linear infinite;
-    }
-
     .loader {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid var(--primary-neon);
+      display: none;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid var(--neon-red);
       border-radius: 50%;
-      width: 40px;
-      height: 40px;
+      width: 50px;
+      height: 50px;
       animation: spin 1s linear infinite;
       margin: 20px auto;
-      display: none;
+      box-shadow: var(--shadow-glow);
     }
-
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-
+    .custom-file-upload {
+      display: inline-block;
+      cursor: pointer;
+      background: var(--neon-red);
+      color: var(--background);
+      padding: 14px 30px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      box-shadow: var(--shadow-glow);
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+    .custom-file-upload:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px var(--neon-red), 0 0 30px var(--neon-red);
+    }
+    .progress-bar {
+      width: 100%;
+      max-width: 700px;
+      height: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      margin: 30px auto;
+      overflow: hidden;
+      border: 1px solid var(--neon-red-glow);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--neon-red);
+      width: 0%;
+      transition: width 0.4s ease;
+      box-shadow: var(--shadow-glow);
+    }
     @media (max-width: 600px) {
-      .cyber-container {
-        margin: 10px;
+      .container {
         padding: 15px;
       }
-      .title {
-        font-size: 1.8rem;
-      }
-      .cyber-btn {
-        padding: 10px 20px;
-        font-size: 0.9rem;
+      .quality-controls {
+        width: 95%;
       }
     }
   </style>
 </head>
 <body>
-  <div class="cyber-container">
-    <h1 class="title">CyberBlur: AI Face Anonymizer</h1>
+  <div class="container">
+    <h1>Neon Face Blur</h1>
     
-    <div class="cyber-controls">
+    <div class="quality-controls">
       <div class="slider-container">
-        <label>Blur Intensity: <span id="blurValue">20</span>px</label>
-        <input type="range" id="blurStrength" min="5" max="50" value="20" />
+        <label>Blur Strength: <span id="blurValue">25</span>px</label>
+        <input type="range" id="blurStrength" min="10" max="60" value="25" />
       </div>
     </div>
 
-    <div class="cyber-buttons">
-      <label for="videoInput" class="cyber-btn">
+    <div class="controls">
+      <label for="videoInput" class="custom-file-upload">
         Upload Video
       </label>
-      <input type="file" id="videoInput" class="file-input" accept="video/*" />
-      <button id="downloadBtn" class="cyber-btn" disabled>Download Video</button>
+      <input type="file" id="videoInput" accept="video/*" style="display: none;" />
+      <button id="downloadBtn" disabled>Download 4K Video</button>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+
+    <div class="stats">
+      <div>Progress: <span id="progress">0%</span></div>
+      <div>Detected Faces: <span id="faceCount">0</span></div>
+      <div>Quality: 4K Ultra HD (with Audio)</div>
     </div>
 
     <div class="loader" id="loader"></div>
-
-    <div class="progress-container">
-      <div class="progress-bar" id="progressBar"></div>
-    </div>
-
-    <div class="cyber-stats">
-      <div>Processing: <span id="progress">0%</span></div>
-      <div>Detected Faces: <span id="faceCount">0</span></div>
-      <div>Quality: 1080p (HD)</div>
-    </div>
   </div>
 
   <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
-
     const videoInput = document.getElementById('videoInput');
     const downloadBtn = document.getElementById('downloadBtn');
     const progress = document.getElementById('progress');
@@ -281,24 +199,25 @@
     const blurValue = document.getElementById('blurValue');
     const progressBar = document.getElementById('progressBar');
     const outputCanvas = document.createElement('canvas');
+    outputCanvas.style.display = 'none'; // Hide canvas
     document.body.appendChild(outputCanvas);
 
     let model;
     let mediaRecorder;
     let recordedChunks = [];
     let processing = false;
-    let currentBlur = 20;
+    let currentBlur = 25;
 
     // Load Blazeface model
     async function loadModel() {
       loader.style.display = 'block';
       try {
-        model = await blazeface.load();
-        console.log("Model loaded!");
+        model = await blazeface.load({ maxFaces: 20 });
+        console.log("Blazeface model loaded successfully!");
         loader.style.display = 'none';
       } catch (error) {
         console.error("Model load failed:", error);
-        alert("Error loading model. Check console.");
+        alert("Error loading model. Please try again.");
         loader.style.display = 'none';
       }
     }
@@ -310,50 +229,56 @@
       blurValue.textContent = currentBlur;
     });
 
-    // Process video automatically on upload
+    // Process video without preview
     videoInput.addEventListener('change', async () => {
-      if (!model) return alert("Model not loaded!");
-      
+      if (!model) return alert("Model not loaded yet!");
+
       const videoFile = videoInput.files[0];
       if (!videoFile) return;
 
       loader.style.display = 'block';
+      recordedChunks = []; // Reset chunks
       downloadBtn.disabled = true;
-      recordedChunks = [];
 
       const videoUrl = URL.createObjectURL(videoFile);
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
-      
+      videoElement.muted = true; // Mute to avoid playback sound
+
       await new Promise(resolve => {
         videoElement.onloadedmetadata = resolve;
       });
 
-      // High quality settings
-      outputCanvas.width = videoElement.videoWidth;
-      outputCanvas.height = videoElement.videoHeight;
-      const bitRate = 5000000; // 5 Mbps for HD quality
+      // Set output to 4K or input resolution
+      const targetWidth = Math.min(videoElement.videoWidth, 3840);
+      const targetHeight = Math.min(videoElement.videoHeight, 2160);
+      outputCanvas.width = targetWidth;
+      outputCanvas.height = targetHeight;
 
-      // Setup media recorder
-      const canvasStream = outputCanvas.captureStream(30);
-      const audioStream = await getAudioStream(videoElement);
-      if(audioStream) canvasStream.addTrack(audioStream);
+      // High-quality settings
+      const bitRate = 20000000; // 20 Mbps
+      const frameRate = 60;
+
+      const canvasStream = outputCanvas.captureStream(frameRate);
+      const audioTracks = videoElement.captureStream().getAudioTracks();
+      if (audioTracks.length > 0) {
+        audioTracks.forEach(track => canvasStream.addTrack(track));
+      }
 
       mediaRecorder = new MediaRecorder(canvasStream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: bitRate
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: bitRate,
+        audioBitsPerSecond: 128000
       });
 
       mediaRecorder.ondataavailable = e => recordedChunks.push(e.data);
       mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        const mp4Blob = convertWebMToMP4(blob);
+        loader.style.display = 'none';
         downloadBtn.disabled = false;
       };
-
       mediaRecorder.start(100);
 
-      // Start processing
+      // Process frames
       processing = true;
       const startTime = Date.now();
       const totalDuration = videoElement.duration * 1000;
@@ -363,16 +288,17 @@
 
         const currentTime = Date.now() - startTime;
         videoElement.currentTime = currentTime / 1000;
-        
+
         await new Promise(resolve => {
           videoElement.onseeked = resolve;
+          videoElement.onerror = () => resolve();
         });
 
-        const ctx = outputCanvas.getContext('2d');
+        const ctx = outputCanvas.getContext('2d', { alpha: false });
         ctx.drawImage(videoElement, 0, 0, outputCanvas.width, outputCanvas.height);
 
         // Face detection and blur
-        const predictions = await model.estimateFaces(videoElement);
+        const predictions = await model.estimateFaces(videoElement, false, true);
         faceCount.textContent = predictions.length;
 
         predictions.forEach(pred => {
@@ -383,17 +309,20 @@
             pred.bottomRight[1] - pred.topLeft[1]
           ];
 
+          const padding = currentBlur * 0.5;
           ctx.save();
           ctx.beginPath();
-          ctx.rect(x, y, width, height);
+          ctx.rect(x - padding, y - padding, width + padding * 2, height + padding * 2);
           ctx.clip();
           ctx.filter = `blur(${currentBlur}px)`;
-          ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+          ctx.drawImage(outputCanvas, x - padding, y - padding, 
+            width + padding * 2, height + padding * 2, 
+            x - padding, y - padding, width + padding * 2, height + padding * 2);
           ctx.restore();
         });
 
         // Update progress
-        const progressPercent = (currentTime / totalDuration) * 100;
+        const progressPercent = Math.min((currentTime / totalDuration) * 100, 100);
         progress.textContent = `${progressPercent.toFixed(1)}%`;
         progressBar.style.width = `${progressPercent}%`;
 
@@ -403,72 +332,31 @@
           stopProcessing();
         }
       })();
-
-      loader.style.display = 'none';
     });
 
-    // Get audio stream
-    async function getAudioStream(videoElement) {
-      try {
-        const audioContext = new AudioContext();
-        const source = audioContext.createMediaElementSource(videoElement);
-        const destination = audioContext.createMediaStreamDestination();
-        source.connect(destination);
-        return destination.stream.getAudioTracks()[0];
-      } catch {
-        return null;
-      }
-    }
-
-    // Convert WebM to MP4 (requires FFmpeg.wasm)
-    async function convertWebMToMP4(webmBlob) {
-      loader.style.display = 'block';
-      try {
-        await ffmpeg.load();
-        ffmpeg.FS('writeFile', 'input.webm', await fetchFile(webmBlob));
-        await ffmpeg.run('-i', 'input.webm', '-c', 'copy', 'output.mp4');
-        const data = ffmpeg.FS('readFile', 'output.mp4');
-        return new Blob([data.buffer], { type: 'video/mp4' });
-      } catch (error) {
-        console.error('Conversion error:', error);
-        alert('Error converting video. Check console.');
-        return null;
-      } finally {
-        loader.style.display = 'none';
-      }
-    }
-
     // Download handler
-    downloadBtn.addEventListener('click', async () => {
-      loader.style.display = 'block';
-      downloadBtn.disabled = true;
-      
-      try {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-        const mp4Blob = await convertWebMToMP4(blob);
-        
-        if (mp4Blob) {
-          const url = URL.createObjectURL(mp4Blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `cyberblur-${Date.now()}.mp4`;
-          document.body.appendChild(a);
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-      } catch (error) {
-        console.error('Download error:', error);
-        alert('Error downloading video. Check console.');
-      } finally {
-        loader.style.display = 'none';
-        downloadBtn.disabled = false;
-      }
+    downloadBtn.addEventListener('click', () => {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `blurred-video-${Date.now()}_4K.webm`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     });
 
     function stopProcessing() {
       processing = false;
       mediaRecorder.stop();
     }
+
+    // Cleanup
+    window.addEventListener('beforeunload', () => {
+      if (processing) stopProcessing();
+    });
   </script>
 </body>
 </html>
