@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Face Blur Processing</title>
+  <title>Face Blur Processing with Audio & Stats</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -76,11 +76,11 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    /* Hide video from view */
+    /* Hide the video element from view */
     .hidden-video {
       display: none;
     }
-    /* Keep canvas rendered off-screen so captureStream works */
+    /* Position the canvas off-screen while still rendering at full resolution */
     .hidden-canvas {
       position: absolute;
       top: -9999px;
@@ -92,16 +92,16 @@
   <h1>Face Blur Processing</h1>
   <div class="controls">
     <label for="videoInput" class="custom-file-upload">Choose Video</label>
-    <input type="file" id="videoInput" accept="video/*" style="display: none;" />
+    <input type="file" id="videoInput" accept="video/*" style="display:none;">
     <div class="slider-container">
       <label for="blurStrength">Blur Strength: <span id="blurValue">20</span>px</label>
-      <input type="range" id="blurStrength" min="5" max="50" value="20" />
+      <input type="range" id="blurStrength" min="5" max="50" value="20">
     </div>
     <a id="downloadBtn" class="download-btn" download>Download Processed Video</a>
   </div>
   <div class="loader" id="loader"></div>
   
-  <!-- Hidden video and canvas used for processing -->
+  <!-- Hidden elements for off-screen processing -->
   <video id="inputVideo" class="hidden-video" playsinline></video>
   <canvas id="outputCanvas" class="hidden-canvas"></canvas>
 
@@ -119,6 +119,7 @@
     let recordedChunks = [];
     let blurLevel = 20;
     let animationFrameId;
+    let frameTimes = [];
 
     // Load the Blazeface model
     async function loadModel() {
@@ -126,12 +127,11 @@
       try {
         model = await blazeface.load();
         console.log("Model loaded!");
-        loader.style.display = 'none';
       } catch (error) {
         console.error("Model load failed:", error);
         alert("Error loading model. Check console.");
-        loader.style.display = 'none';
       }
+      loader.style.display = 'none';
     }
     loadModel();
 
@@ -145,41 +145,42 @@
     videoInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (file) {
-        // Reset recorded data and disable download until processing completes
         recordedChunks = [];
         downloadBtn.style.pointerEvents = 'none';
-
+        
         const url = URL.createObjectURL(file);
         inputVideo.src = url;
         await new Promise(resolve => inputVideo.onloadedmetadata = resolve);
         
-        // Set canvas dimensions to match the video
+        // Set canvas dimensions equal to the original video quality
         outputCanvas.width = inputVideo.videoWidth;
         outputCanvas.height = inputVideo.videoHeight;
         
-        // Start processing: play video, record processed frames, and process frames off-screen
+        // Start video playback and processing
         inputVideo.currentTime = 0;
         inputVideo.play();
         startRecording();
         processVideo();
         
-        // When video ends, stop processing and finalize the recording
+        // When the video ends, stop processing and finalize the recording
         inputVideo.onended = () => {
           stopProcessing();
         };
       }
     });
 
-    // Process the video frame by frame
+    // Process video frames off-screen
     async function processVideo() {
       if (inputVideo.paused || inputVideo.ended) return;
       
       const ctx = outputCanvas.getContext('2d');
-      // Draw current frame
+      const startTime = performance.now();
+      
+      // Draw the current video frame
       ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
       
+      // Detect faces and apply blur on each face region if any
       try {
-        // Estimate face positions in the current frame
         const predictions = await model.estimateFaces(inputVideo);
         if (predictions.length > 0) {
           predictions.forEach(pred => {
@@ -187,17 +188,30 @@
             const [x2, y2] = pred.bottomRight;
             const w = x2 - x;
             const h = y2 - y;
-  
             ctx.save();
             ctx.beginPath();
             ctx.rect(x, y, w, h);
             ctx.clip();
             ctx.filter = `blur(${blurLevel}px)`;
-            // Redraw the clipped region with blur
+            // Redraw the clipped (face) region with blur
             ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
             ctx.restore();
           });
         }
+        
+        // Compute processing time for this frame and maintain an average
+        const duration = performance.now() - startTime;
+        frameTimes.push(duration);
+        if(frameTimes.length > 10) frameTimes.shift();
+        const avgTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+        
+        // Overlay stats (face count and processing time) on the frame
+        ctx.save();
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "white";
+        ctx.fillText(`Faces: ${predictions.length}`, 10, 30);
+        ctx.fillText(`Proc Time: ${avgTime.toFixed(1)}ms`, 10, 60);
+        ctx.restore();
       } catch (error) {
         console.error("Processing error:", error);
       }
@@ -205,10 +219,19 @@
       animationFrameId = requestAnimationFrame(processVideo);
     }
 
-    // Start recording the off-screen canvas
+    // Start recording the processed video along with the original audio
     function startRecording() {
-      const stream = outputCanvas.captureStream(30);
-      mediaRecorder = new MediaRecorder(stream, {
+      // Capture the processed video from the canvas
+      const canvasStream = outputCanvas.captureStream(30);
+      // Capture the audio from the original video element
+      const videoStream = inputVideo.captureStream();
+      // Combine the canvas video track and the original audio track(s)
+      const combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...videoStream.getAudioTracks()
+      ]);
+      
+      mediaRecorder = new MediaRecorder(combinedStream, {
         mimeType: 'video/webm;codecs=vp9',
         videoBitsPerSecond: 2.5e6
       });
@@ -230,7 +253,7 @@
       inputVideo.pause();
     }
 
-    // Combine recorded chunks and enable the download button
+    // Combine recorded chunks, create a Blob, and enable the download button
     async function exportVideo() {
       loader.style.display = 'block';
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
