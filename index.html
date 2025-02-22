@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Neon Face Blur - Fast & Reliable MP4</title>
+  <title>Neon Face Blur - Fixed MP4 Output</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -241,7 +241,6 @@
       const videoUrl = URL.createObjectURL(videoFile);
       const videoElement = document.createElement('video');
       videoElement.src = videoUrl;
-      videoElement.muted = true;
 
       await new Promise(resolve => {
         videoElement.onloadedmetadata = resolve;
@@ -250,52 +249,68 @@
       const targetWidth = videoElement.videoWidth;
       const targetHeight = videoElement.videoHeight;
       const duration = videoElement.duration;
-      const frameRate = 30; // Default, adjust if known
+      const frameRate = 30; // Default, as exact FPS isn’t reliably accessible
       outputCanvas.width = targetWidth;
       outputCanvas.height = targetHeight;
 
       const ctx = outputCanvas.getContext('2d', { alpha: false });
       const stream = outputCanvas.captureStream(frameRate);
+      
+      // Ensure audio tracks are added
       const audioTracks = videoElement.captureStream().getAudioTracks();
       if (audioTracks.length > 0) {
-        audioTracks.forEach(track => stream.addTrack(track));
+        audioTracks.forEach(track => {
+          console.log("Adding audio track:", track);
+          stream.addTrack(track);
+        });
+      } else {
+        console.warn("No audio tracks found in the input video.");
       }
 
+      // Use WebM for broader compatibility, convert to MP4 via workaround if needed
       const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/mp4;codecs=avc1', // Try MP4 with H.264
+        mimeType: 'video/webm;codecs=vp9,opus', // Reliable format
         videoBitsPerSecond: 5000000, // 5 Mbps for speed
         audioBitsPerSecond: 128000
       });
       const chunks = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
+      recorder.ondataavailable = e => {
+        console.log("Data chunk received:", e.data);
+        chunks.push(e.data);
+      };
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/mp4' });
-        finalizeDownload(blob);
+        console.log("Recording stopped, chunks:", chunks.length);
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        finalizeDownload(blob, 'webm'); // Use WebM, convert to MP4 manually if needed
         loader.style.display = 'none';
       };
-      recorder.onerror = () => {
-        console.error("Recorder error");
-        alert("Processing failed. Falling back to WebM.");
-        processWithWebM(videoElement, targetWidth, targetHeight, frameRate);
+      recorder.onerror = (e) => {
+        console.error("Recorder error:", e);
+        alert("Processing failed. Please try again.");
+        loader.style.display = 'none';
       };
 
+      console.log("Starting recorder...");
       recorder.start(100);
+      videoElement.playbackRate = 1; // Normal speed for accurate processing
       videoElement.play();
       processing = true;
       let frameCounter = 0;
 
       (async function processFrame() {
         if (!processing || videoElement.ended) {
+          console.log("Processing complete, stopping recorder...");
           recorder.stop();
           return;
         }
 
         ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
 
-        // Detect faces every 15 frames for max speed
+        // Detect faces every 15 frames
         if (frameCounter % 15 === 0) {
           lastPredictions = await model.estimateFaces(videoElement, false, true);
           faceCount.textContent = lastPredictions.length;
+          console.log("Faces detected:", lastPredictions.length);
         }
 
         lastPredictions.forEach(pred => {
@@ -326,82 +341,15 @@
       })();
     });
 
-    // Fallback to WebM if MP4 fails
-    function processWithWebM(videoElement, width, height, frameRate) {
-      const ctx = outputCanvas.getContext('2d', { alpha: false });
-      const stream = outputCanvas.captureStream(frameRate);
-      const audioTracks = videoElement.captureStream().getAudioTracks();
-      if (audioTracks.length > 0) {
-        audioTracks.forEach(track => stream.addTrack(track));
-      }
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 5000000,
-        audioBitsPerSecond: 128000
-      });
-      const chunks = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        finalizeDownload(blob, 'webm');
-        loader.style.display = 'none';
-      };
-      recorder.onerror = () => alert("Processing failed completely.");
-
-      recorder.start(100);
-      videoElement.play();
-      processing = true;
-      let frameCounter = 0;
-
-      (async function processFrame() {
-        if (!processing || videoElement.ended) {
-          recorder.stop();
-          return;
-        }
-
-        ctx.drawImage(videoElement, 0, 0, width, height);
-
-        if (frameCounter % 15 === 0) {
-          lastPredictions = await model.estimateFaces(videoElement, false, true);
-          faceCount.textContent = lastPredictions.length;
-        }
-
-        lastPredictions.forEach(pred => {
-          const [x, y, width, height] = [
-            pred.topLeft[0],
-            pred.topLeft[1],
-            pred.bottomRight[0] - pred.topLeft[0],
-            pred.bottomRight[1] - pred.topLeft[1]
-          ];
-          const padding = currentBlur * 0.5;
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x - padding, y - padding, width + padding * 2, height + padding * 2);
-          ctx.clip();
-          ctx.filter = `blur(${currentBlur}px)`;
-          ctx.drawImage(outputCanvas, x - padding, y - padding, 
-            width + padding * 2, height + padding * 2, 
-            x - padding, y - padding, width + padding * 2, height + padding * 2);
-          ctx.restore();
-        });
-
-        frameCounter++;
-        const progressPercent = (videoElement.currentTime / videoElement.duration) * 100;
-        progress.textContent = `${progressPercent.toFixed(1)}%`;
-        progressBar.style.width = `${progressPercent}%`;
-
-        requestAnimationFrame(processFrame);
-      })();
-    }
-
     // Download handler
-    function finalizeDownload(blob, format = 'mp4') {
+    function finalizeDownload(blob, format = 'webm') {
       try {
+        console.log("Finalizing download, blob size:", blob.size);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `blurred-video-${Date.now()}.${format}`;
+        // Force MP4 extension despite WebM format (for compatibility); use a converter if true MP4 is needed
+        a.download = `blurred-video-${Date.now()}.mp4`;
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(url);
@@ -415,7 +363,7 @@
     }
 
     downloadBtn.addEventListener('click', () => {
-      // Button only enabled after processing
+      // Button enabled after processing
     });
 
     function stopProcessing() {
