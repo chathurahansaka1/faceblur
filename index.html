@@ -3,194 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CyberBlur: Face Anonymizer</title>
+    <title>Real-Time Face Blur</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
     <style>
-        body {
-            background-color: #0a192f;
-            color: #64ffda;
-            font-family: 'Arial', sans-serif;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .cyber-container {
-            background-color: #112240;
-            border: 2px solid #64ffda;
-            box-shadow: 0 0 15px #64ffda;
-            border-radius: 12px;
-            padding: 20px;
-            max-width: 800px;
-            width: 100%;
-        }
-        h1 {
-            text-align: center;
-            font-size: 2.5rem;
-            margin-bottom: 20px;
-        }
-        input[type="file"], select, button {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 8px;
-            border: 2px solid #64ffda;
-            background-color: #0a192f;
-            color: #64ffda;
-            font-size: 1rem;
-        }
-        button {
-            background-color: #64ffda;
-            color: #0a192f;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        button:hover {
-            background-color: #00ff87;
-        }
-        video, canvas {
-            width: 100%;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 10px;
-            background-color: #0a192f;
-            border-radius: 5px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        .progress-bar-inner {
-            height: 100%;
-            background: linear-gradient(to right, #64ffda, #00ff87);
-            width: 0%;
-        }
-        .hidden {
-            display: none;
-        }
+        body { margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
+        .container { max-width: 800px; margin: auto; }
+        video, canvas { width: 100%; border: 2px solid #00ff87; border-radius: 8px; }
+        .controls { margin: 20px 0; }
+        button { background: #00ff87; color: #000; border: none; padding: 10px 20px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="cyber-container">
-        <h1>CyberBlur: Face Anonymizer</h1>
-        
-        <!-- File Input -->
-        <input type="file" id="videoInput" accept="video/*">
-        
-        <!-- Anonymization Options -->
-        <select id="blurType">
-            <option value="pixelate">Pixelate</option>
-            <option value="blur">Gaussian Blur</option>
-            <option value="solid">Solid Color</option>
-        </select>
-        
-        <!-- Intensity Slider -->
-        <input type="range" id="blurIntensity" min="10" max="100" value="50">
-        
-        <!-- Video and Canvas -->
+    <div class="container">
         <video id="inputVideo" controls></video>
         <canvas id="outputCanvas"></canvas>
-        
-        <!-- Buttons -->
-        <button id="processButton">Anonymize Video</button>
-        <a id="downloadLink" class="hidden" download="anonymized_video.mp4">
-            <button>Download Anonymized Video</button>
-        </a>
-        
-        <!-- Progress Bar -->
-        <div class="progress-bar">
-            <div class="progress-bar-inner" id="progressBar"></div>
+        <div class="controls">
+            <input type="file" id="videoInput" accept="video/*">
+            <button id="processBtn">Start Processing</button>
+            <a id="downloadLink" hidden><button>Download</button></a>
         </div>
-        <p id="progressText" class="hidden">Processing: 0%</p>
     </div>
 
     <script>
-        // DOM Elements
         const videoInput = document.getElementById('videoInput');
         const inputVideo = document.getElementById('inputVideo');
         const outputCanvas = document.getElementById('outputCanvas');
-        const processButton = document.getElementById('processButton');
+        const processBtn = document.getElementById('processBtn');
         const downloadLink = document.getElementById('downloadLink');
-        const blurIntensity = document.getElementById('blurIntensity');
-        const blurType = document.getElementById('blurType');
-        const progressBar = document.getElementById('progressBar');
-        const progressText = document.getElementById('progressText');
 
         let model;
         let mediaRecorder;
         let recordedChunks = [];
 
-        // Load Blazeface Model
+        // Blazeface මාදිලිය පූරණය කිරීම
         async function loadModel() {
             model = await blazeface.load();
+            console.log("Model loaded!");
         }
         loadModel();
 
-        // Handle File Input
-        videoInput.addEventListener('change', function(e) {
+        // වීඩියෝ තෝරාගැනීම
+        videoInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            const videoURL = URL.createObjectURL(file);
-            inputVideo.src = videoURL;
+            inputVideo.src = URL.createObjectURL(file);
         });
 
-        // Process Video on Button Click
-        processButton.addEventListener('click', processVideo);
-
-        async function processVideo() {
+        // ප්‍රොසෙසින් ආරම්භ කිරීම
+        processBtn.addEventListener('click', async () => {
             const ctx = outputCanvas.getContext('2d');
+            
+            // Canvas සකස් කිරීම
             outputCanvas.width = inputVideo.videoWidth;
             outputCanvas.height = inputVideo.videoHeight;
 
-            // Disable Button and Show Progress
-            processButton.disabled = true;
-            processButton.textContent = 'Processing...';
-            progressText.classList.remove('hidden');
-
-            // Set Up MediaRecorder
+            // MediaRecorder සකස් කිරීම
             const stream = outputCanvas.captureStream(30);
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+            mediaRecorder = new MediaRecorder(stream, { 
+                mimeType: 'video/webm; codecs=vp9' 
+            });
 
-            mediaRecorder.ondataavailable = function(e) {
-                recordedChunks.push(e.data);
-            };
-
-            mediaRecorder.onstop = function() {
+            mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+            mediaRecorder.onstop = () => {
                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                downloadLink.href = url;
-                downloadLink.classList.remove('hidden');
-                recordedChunks = [];
+                downloadLink.href = URL.createObjectURL(blob);
+                downloadLink.hidden = false;
             };
-
             mediaRecorder.start();
 
-            // Process Frames
+            // රියල් ටයිම් ප්‍රොසෙසින්
             inputVideo.addEventListener('play', async () => {
                 while (!inputVideo.paused && !inputVideo.ended) {
                     await processFrame();
-                    updateProgress();
-                    await waitForNextFrame();
+                    await new Promise(resolve => requestAnimationFrame(resolve));
                 }
                 mediaRecorder.stop();
-                processButton.disabled = false;
-                processButton.textContent = 'Anonymize Video';
             });
 
             inputVideo.play();
-        }
+        });
 
+        // එක් රාමුවක් සැකසීම
         async function processFrame() {
             const ctx = outputCanvas.getContext('2d');
-            ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-
-            // Detect Faces
-            const predictions = await model.estimateFaces(inputVideo, false);
             
-            // Anonymize Faces
+            // වීඩියෝ රාමුව Canvas එකට අඳින්න
+            ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+            
+            // මුහුණු හඳුනාගැනීම
+            const predictions = await model.estimateFaces(outputCanvas, false);
+            
+            // එක් එක් මුහුණු අන්තර්ගත කිරීම
             predictions.forEach(prediction => {
                 const [x, y, width, height] = [
                     prediction.topLeft[0],
@@ -198,48 +101,16 @@
                     prediction.bottomRight[0] - prediction.topLeft[0],
                     prediction.bottomRight[1] - prediction.topLeft[1]
                 ];
-                anonymizeFace(ctx, x, y, width, height);
+                
+                // බ්ලර් කිරීම
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, width, height);
+                ctx.clip();
+                ctx.filter = 'blur(15px)';
+                ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+                ctx.restore();
             });
-        }
-
-        function anonymizeFace(ctx, x, y, w, h) {
-            const type = blurType.value;
-            const intensity = blurIntensity.value / 10;
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, y, w, h);
-            ctx.clip();
-
-            switch (type) {
-                case 'pixelate':
-                    ctx.imageSmoothingEnabled = false;
-                    const size = Math.max(5, w / intensity);
-                    ctx.drawImage(outputCanvas, x, y, w, h, x, y, size, size);
-                    ctx.drawImage(outputCanvas, x, y, size, size, x, y, w, h);
-                    break;
-
-                case 'blur':
-                    ctx.filter = `blur(${intensity}px)`;
-                    ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
-                    break;
-
-                case 'solid':
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(x, y, w, h);
-                    break;
-            }
-            ctx.restore();
-        }
-
-        function updateProgress() {
-            const progress = Math.round((inputVideo.currentTime / inputVideo.duration) * 100);
-            progressBar.style.width = `${progress}%`;
-            progressText.textContent = `Processing: ${progress}%`;
-        }
-
-        function waitForNextFrame() {
-            return new Promise(resolve => requestAnimationFrame(resolve));
         }
     </script>
 </body>
