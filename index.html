@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Face Blur Processing with Audio & Stats</title>
+  <title>Video Face Blur</title>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
   <style>
@@ -17,7 +17,20 @@
       background: var(--background);
       color: #fff;
       font-family: 'Segoe UI', sans-serif;
+    }
+    .container {
+      max-width: 100%;
+      margin: auto;
       text-align: center;
+    }
+    video,
+    canvas {
+      width: 100%;
+      max-width: 100%;
+      border: 2px solid var(--primary-color);
+      border-radius: 12px;
+      margin: 10px 0;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
     }
     .controls {
       margin: 15px 0;
@@ -25,6 +38,54 @@
       flex-wrap: wrap;
       gap: 10px;
       justify-content: center;
+    }
+    button {
+      background: var(--primary-color);
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: transform 0.2s, background 0.3s;
+    }
+    button:hover {
+      background: #00cc70;
+      transform: scale(1.05);
+    }
+    .slider-container {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+      width: 100%;
+      max-width: 300px;
+    }
+    .stats {
+      margin-top: 15px;
+      font-size: 12px;
+      color: #aaa;
+    }
+    #faceCount {
+      color: var(--primary-color);
+      font-weight: bold;
+    }
+    .loader {
+      display: none;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary-color);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 10px auto;
+    }
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
     }
     .custom-file-upload {
       display: inline-block;
@@ -40,228 +101,187 @@
       background: #00cc70;
       transform: scale(1.05);
     }
-    .slider-container {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 10px;
-      border-radius: 8px;
-      width: 100%;
-      max-width: 300px;
-    }
-    a.download-btn {
-      background: var(--primary-color);
-      color: #000;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      transition: transform 0.2s, background 0.3s;
-      text-decoration: none;
-      pointer-events: none;
-    }
-    a.download-btn:hover {
-      background: #00cc70;
-      transform: scale(1.05);
-    }
-    .loader {
-      display: none;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid var(--primary-color);
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 10px auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    /* Hide the video element from view */
-    .hidden-video {
-      display: none;
-    }
-    /* Position the canvas off-screen while still rendering at full resolution */
-    .hidden-canvas {
-      position: absolute;
-      top: -9999px;
-      left: -9999px;
-    }
   </style>
 </head>
 <body>
-  <h1>Face Blur Processing</h1>
-  <div class="controls">
-    <label for="videoInput" class="custom-file-upload">Choose Video</label>
-    <input type="file" id="videoInput" accept="video/*" style="display:none;">
-    <div class="slider-container">
-      <label for="blurStrength">Blur Strength: <span id="blurValue">20</span>px</label>
-      <input type="range" id="blurStrength" min="5" max="50" value="20">
+  <div class="container">
+    <h1>Video Face Blur</h1>
+    
+    <div class="controls">
+      <!-- File input section -->
+      <label for="videoInput" class="custom-file-upload">
+        Upload Video
+      </label>
+      <input type="file" id="videoInput" accept="video/*" style="display: none;" />
+      
+      <!-- Processing controls -->
+      <button id="processBtn" disabled>Process Video</button>
+      <button id="downloadBtn" disabled>Download Video</button>
+      
+      <!-- Progress indicators -->
+      <div class="stats">
+        <div>Progress: <span id="progress">0%</span></div>
+        <div>Detected Faces: <span id="faceCount">0</span></div>
+      </div>
     </div>
-    <a id="downloadBtn" class="download-btn" download>Download Processed Video</a>
+
+    <div class="loader" id="loader"></div>
   </div>
-  <div class="loader" id="loader"></div>
-  
-  <!-- Hidden elements for off-screen processing -->
-  <video id="inputVideo" class="hidden-video" playsinline></video>
-  <canvas id="outputCanvas" class="hidden-canvas"></canvas>
 
   <script>
     const videoInput = document.getElementById('videoInput');
-    const inputVideo = document.getElementById('inputVideo');
-    const outputCanvas = document.getElementById('outputCanvas');
+    const processBtn = document.getElementById('processBtn');
     const downloadBtn = document.getElementById('downloadBtn');
-    const blurStrength = document.getElementById('blurStrength');
-    const blurValue = document.getElementById('blurValue');
+    const progress = document.getElementById('progress');
+    const faceCount = document.getElementById('faceCount');
     const loader = document.getElementById('loader');
+    const outputCanvas = document.createElement('canvas');
+    document.body.appendChild(outputCanvas);
 
     let model;
+    let videoStream;
+    let audioStream;
     let mediaRecorder;
     let recordedChunks = [];
-    let blurLevel = 20;
-    let animationFrameId;
-    let frameTimes = [];
+    let processing = false;
 
-    // Load the Blazeface model
+    // Load Blazeface model
     async function loadModel() {
       loader.style.display = 'block';
       try {
         model = await blazeface.load();
         console.log("Model loaded!");
+        loader.style.display = 'none';
       } catch (error) {
         console.error("Model load failed:", error);
         alert("Error loading model. Check console.");
+        loader.style.display = 'none';
       }
-      loader.style.display = 'none';
     }
     loadModel();
 
-    // Update blur level from slider
-    blurStrength.addEventListener('input', () => {
-      blurLevel = blurStrength.value;
-      blurValue.textContent = blurLevel;
-    });
+    // Initialize video processing
+    async function initializeProcessing() {
+      const videoFile = videoInput.files[0];
+      if (!videoFile) return;
 
-    // When a video file is chosen, process it automatically
-    videoInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        recordedChunks = [];
-        downloadBtn.style.pointerEvents = 'none';
-        
-        const url = URL.createObjectURL(file);
-        inputVideo.src = url;
-        await new Promise(resolve => inputVideo.onloadedmetadata = resolve);
-        
-        // Set canvas dimensions equal to the original video quality
-        outputCanvas.width = inputVideo.videoWidth;
-        outputCanvas.height = inputVideo.videoHeight;
-        
-        // Start video playback and processing
-        inputVideo.currentTime = 0;
-        inputVideo.play();
-        startRecording();
-        processVideo();
-        
-        // When the video ends, stop processing and finalize the recording
-        inputVideo.onended = () => {
-          stopProcessing();
-        };
-      }
-    });
-
-    // Process video frames off-screen
-    async function processVideo() {
-      if (inputVideo.paused || inputVideo.ended) return;
+      const videoUrl = URL.createObjectURL(videoFile);
+      const videoElement = document.createElement('video');
+      videoElement.src = videoUrl;
       
-      const ctx = outputCanvas.getContext('2d');
-      const startTime = performance.now();
-      
-      // Draw the current video frame
-      ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-      
-      // Detect faces and apply blur on each face region if any
-      try {
-        const predictions = await model.estimateFaces(inputVideo);
-        if (predictions.length > 0) {
-          predictions.forEach(pred => {
-            const [x, y] = pred.topLeft;
-            const [x2, y2] = pred.bottomRight;
-            const w = x2 - x;
-            const h = y2 - y;
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, y, w, h);
-            ctx.clip();
-            ctx.filter = `blur(${blurLevel}px)`;
-            // Redraw the clipped (face) region with blur
-            ctx.drawImage(outputCanvas, x, y, w, h, x, y, w, h);
-            ctx.restore();
-          });
-        }
-        
-        // Compute processing time for this frame and maintain an average
-        const duration = performance.now() - startTime;
-        frameTimes.push(duration);
-        if(frameTimes.length > 10) frameTimes.shift();
-        const avgTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
-        
-        // Overlay stats (face count and processing time) on the frame
-        ctx.save();
-        ctx.font = "20px Arial";
-        ctx.fillStyle = "white";
-        ctx.fillText(`Faces: ${predictions.length}`, 10, 30);
-        ctx.fillText(`Proc Time: ${avgTime.toFixed(1)}ms`, 10, 60);
-        ctx.restore();
-      } catch (error) {
-        console.error("Processing error:", error);
-      }
-      
-      animationFrameId = requestAnimationFrame(processVideo);
-    }
-
-    // Start recording the processed video along with the original audio
-    function startRecording() {
-      // Capture the processed video from the canvas
-      const canvasStream = outputCanvas.captureStream(30);
-      // Capture the audio from the original video element
-      const videoStream = inputVideo.captureStream();
-      // Combine the canvas video track and the original audio track(s)
-      const combinedStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
-        ...videoStream.getAudioTracks()
-      ]);
-      
-      mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp9',
-        videoBitsPerSecond: 2.5e6
+      await new Promise(resolve => {
+        videoElement.onloadedmetadata = resolve;
       });
-      mediaRecorder.ondataavailable = e => {
-        if (e.data && e.data.size > 0) {
-          recordedChunks.push(e.data);
-        }
-      };
-      mediaRecorder.onstop = exportVideo;
+
+      const mediaStream = videoElement.captureStream();
+      audioStream = mediaStream.getAudioTracks()[0];
+
+      outputCanvas.width = videoElement.videoWidth;
+      outputCanvas.height = videoElement.videoHeight;
+
+      return videoElement;
+    }
+
+    // Process video frame-by-frame
+    async function processVideo() {
+      const videoElement = await initializeProcessing();
+      const totalDuration = videoElement.duration * 1000;
+      let startTime = Date.now();
+
+      const canvasStream = outputCanvas.captureStream(30);
+      if(audioStream) canvasStream.addTrack(audioStream);
+
+      mediaRecorder = new MediaRecorder(canvasStream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 2500000
+      });
+
+      mediaRecorder.ondataavailable = handleDataAvailable;
       mediaRecorder.start(100);
+
+      (async function processFrame() {
+        if(!processing) return;
+
+        const currentTime = Date.now() - startTime;
+        const progressPercent = (currentTime / totalDuration) * 100;
+        progress.textContent = `${progressPercent.toFixed(1)}%`;
+
+        if(currentTime >= totalDuration) {
+          stopProcessing();
+          return;
+        }
+
+        await processSingleFrame(videoElement);
+        requestAnimationFrame(processFrame);
+      })();
     }
 
-    // Stop processing and recording when video ends
-    function stopProcessing() {
-      cancelAnimationFrame(animationFrameId);
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
+    // Process a single frame
+    async function processSingleFrame(video) {
+      const ctx = outputCanvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      
+      try {
+        const predictions = await model.estimateFaces(video);
+        faceCount.textContent = predictions.length;
+
+        predictions.forEach(pred => {
+          const [x, y, width, height] = [
+            pred.topLeft[0],
+            pred.topLeft[1],
+            pred.bottomRight[0] - pred.topLeft[0],
+            pred.bottomRight[1] - pred.topLeft[1]
+          ];
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x, y, width, height);
+          ctx.clip();
+          ctx.filter = `blur(20px)`;
+          ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+          ctx.restore();
+        });
+      } catch (error) {
+        console.error('Processing error:', error);
       }
-      inputVideo.pause();
     }
 
-    // Combine recorded chunks, create a Blob, and enable the download button
-    async function exportVideo() {
-      loader.style.display = 'block';
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    // Handle recording data
+    function handleDataAvailable(event) {
+      if (event.data.size > 0) {
+        recordedChunks.push(event.data);
+      }
+    }
+
+    // Start processing
+    processBtn.addEventListener('click', () => {
+      processing = true;
+      processVideo();
+    });
+
+    // Download handler
+    downloadBtn.addEventListener('click', async () => {
+      const blob = new Blob(recordedChunks, {type: 'video/webm'});
       const url = URL.createObjectURL(blob);
-      downloadBtn.href = url;
-      downloadBtn.download = `processed-video-${Date.now()}.webm`;
-      downloadBtn.style.pointerEvents = 'auto';
-      loader.style.display = 'none';
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `blurred-video-${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Enable process button when file selected
+    videoInput.addEventListener('change', () => {
+      processBtn.disabled = false;
+    });
+
+    // Stop processing
+    function stopProcessing() {
+      processing = false;
+      mediaRecorder.stop();
+      downloadBtn.disabled = false;
     }
   </script>
 </body>
