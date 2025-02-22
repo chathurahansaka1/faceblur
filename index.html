@@ -295,9 +295,8 @@
             loader.style.display = 'block';
             const blob = new Blob(recordedChunks, { type: 'video/webm' });
             
-            // WebM to MP4 conversion (if needed)
+            // Create a download link
             const url = URL.createObjectURL(blob);
-            
             downloadBtn.href = url;
             downloadBtn.download = `blurred-video-${Date.now()}.webm`;
             downloadBtn.disabled = false;
@@ -306,7 +305,10 @@
 
         // Download button handling
         downloadBtn.addEventListener('click', (e) => {
-            if (downloadBtn.disabled) e.preventDefault();
+            if (downloadBtn.disabled) {
+                e.preventDefault();
+                alert("Processing not complete yet!");
+            }
         });
 
         // Handle video end
