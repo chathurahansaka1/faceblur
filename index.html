@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto-Repeat Video Processing</title>
+    <title>Auto-Repeat Video Blur Processor</title>
     <style>
-        /* Red Neon Theme */
         :root {
             --neon-red: #ff004c;
             --neon-pink: #ff00ff;
@@ -23,340 +22,102 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            overflow-x: hidden;
         }
 
         .container {
             width: 95%;
-            max-width: 1200px;
+            max-width: 800px;
             padding: 2rem;
             background: var(--glass-bg);
             backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            box-shadow: 0 0 30px rgba(255, 0, 76, 0.2);
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 2.5rem;
-            background: linear-gradient(45deg, var(--neon-red), var(--neon-pink));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 15px var(--neon-red);
-            margin-bottom: 2rem;
+            border: 1px solid var(--neon-red);
+            border-radius: 15px;
+            box-shadow: 0 0 30px var(--neon-red);
         }
 
         .video-container {
             position: relative;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            border: 2px solid var(--neon-red);
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 0 20px var(--neon-red);
+            margin: 2rem 0;
         }
 
-        #inputVideo, #outputCanvas {
+        #inputVideo {
             width: 100%;
-            display: block;
+            display: none;
         }
 
         .controls {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 1rem;
-            margin: 2rem 0;
+            margin: 1rem 0;
         }
 
         .btn {
             background: linear-gradient(45deg, var(--neon-red), var(--neon-pink));
             color: white;
-            padding: 12px 25px;
+            padding: 12px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 1rem;
-            font-weight: bold;
             transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0 15px var(--neon-red);
-        }
-
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            background: #555;
-        }
-
-        .slider-container {
-            margin: 1rem 0;
-        }
-
-        .slider-container label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--neon-red);
-        }
-
-        .slider {
-            width: 100%;
-            accent-color: var(--neon-red);
         }
 
         .progress-container {
-            width: 100%;
             height: 15px;
             background: rgba(255, 0, 76, 0.1);
             border-radius: 10px;
-            overflow: hidden;
             margin: 1rem 0;
         }
 
         .progress-bar {
-            width: 0%;
             height: 100%;
             background: linear-gradient(90deg, var(--neon-red), var(--neon-pink));
             transition: width 0.3s ease;
-        }
-
-        .status {
-            text-align: center;
-            color: var(--neon-red);
-            margin: 1rem 0;
-            min-height: 24px;
-        }
-
-        .loading {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-            border: 3px solid var(--neon-red);
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>AUTO-REPEAT VIDEO PROCESSING</h1>
-        
         <div class="video-container">
-            <video id="inputVideo" controls></video>
+            <video id="inputVideo" controls loop></video>
             <canvas id="outputCanvas"></canvas>
         </div>
 
         <div class="controls">
             <input type="file" id="videoInput" accept="video/*" hidden>
             <button class="btn" onclick="document.getElementById('videoInput').click()">
-                📁 Upload Video
+                උඩුගත කරන්න
             </button>
             <button class="btn" id="processBtn" disabled>
-                ⚡ Process Video
-            </button>
-            <button class="btn" id="stopBtn" disabled>
-                ⛔ Stop Processing
+                ප්රතිඵලය
             </button>
             <button class="btn" id="downloadBtn" disabled>
-                💾 Download
+                බාගත කරන්න
             </button>
-        </div>
-
-        <div class="slider-container">
-            <label for="blurIntensity">Blur Intensity: <span id="blurValue">15</span>px</label>
-            <input type="range" id="blurIntensity" class="slider" min="5" max="50" value="15">
         </div>
 
         <div class="progress-container">
-            <div class="progress-bar"></div>
+            <div class="progress-bar" id="progressBar"></div>
         </div>
-
-        <div class="status" id="status"></div>
     </div>
 
-    <!-- TensorFlow.js and Blazeface -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 
     <script>
         const videoInput = document.getElementById('videoInput');
         const inputVideo = document.getElementById('inputVideo');
-        const outputCanvas = document.getElementById('outputCanvas');
+        const outputCanvas = document.createElement('canvas');
         const processBtn = document.getElementById('processBtn');
-        const stopBtn = document.getElementById('stopBtn');
         const downloadBtn = document.getElementById('downloadBtn');
-        const statusEl = document.getElementById('status');
-        const progressBar = document.querySelector('.progress-bar');
-        const blurIntensity = document.getElementById('blurIntensity');
-        const blurValue = document.getElementById('blurValue');
+        const progressBar = document.getElementById('progressBar');
 
         let model;
         let mediaRecorder;
         let chunks = [];
         let isProcessing = false;
-        let currentBlur = 15;
 
-        // Update blur intensity
-        blurIntensity.addEventListener('input', () => {
-            currentBlur = blurIntensity.value;
-            blurValue.textContent = currentBlur;
-        });
-
-        // 1. Model Loading with Error Handling
-        async function initializeApp() {
-            try {
-                statusEl.innerHTML = `<div class="loading"></div> Loading AI Model...`;
-                
-                // Initialize TensorFlow.js
-                await tf.setBackend('webgl');
-                await tf.ready();
-                
-                // Load Blazeface Model
-                model = await blazeface.load({
-                    maxFaces: 10,
-                    detectionConfidence: 0.8
-                });
-                
-                statusEl.textContent = "Ready to process videos!";
-                processBtn.disabled = false;
-            } catch (error) {
-                statusEl.innerHTML = `❌ Error: ${error.message}<br>Please refresh the page or check your internet connection.`;
-                console.error("Initialization error:", error);
-            }
-        }
-
-        // 2. Video Processing Core
-        async function processVideo() {
-            if (isProcessing) return;
-            isProcessing = true;
-            stopBtn.disabled = false;
-            processBtn.disabled = true;
-            
-            try {
-                // Setup Canvas
-                outputCanvas.width = inputVideo.videoWidth;
-                outputCanvas.height = inputVideo.videoHeight;
-                const ctx = outputCanvas.getContext('2d');
-                
-                // Initialize MediaRecorder with Audio
-                const stream = outputCanvas.captureStream(30);
-                const audioStream = inputVideo.captureStream().getAudioTracks();
-                if (audioStream.length > 0) {
-                    stream.addTrack(audioStream[0]);
-                }
-
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm; codecs=vp9',
-                    videoBitsPerSecond: 5000000
-                });
-
-                mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                mediaRecorder.onstop = saveVideo;
-                mediaRecorder.start();
-
-                // Frame Processing
-                let lastTime = 0;
-                const totalFrames = Math.floor(inputVideo.duration * 30);
-                let processedFrames = 0;
-
-                function processFrame(timestamp) {
-                    if (!isProcessing) return;
-
-                    const progress = (processedFrames / totalFrames) * 100;
-                    progressBar.style.width = `${progress}%`;
-                    statusEl.textContent = `Processing: ${progress.toFixed(1)}%`;
-
-                    if (processedFrames >= totalFrames) {
-                        mediaRecorder.stop();
-                        isProcessing = false;
-                        stopBtn.disabled = true;
-                        downloadBtn.disabled = false;
-                        statusEl.textContent = "Processing complete! ✅";
-                        return;
-                    }
-
-                    ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-                    
-                    // Face Detection
-                    model.estimateFaces(inputVideo).then(predictions => {
-                        predictions.forEach(prediction => {
-                            const [x, y, width, height] = [
-                                prediction.topLeft[0],
-                                prediction.topLeft[1],
-                                prediction.bottomRight[0] - prediction.topLeft[0],
-                                prediction.bottomRight[1] - prediction.topLeft[1]
-                            ];
-
-                            // Apply Blur Effect
-                            ctx.save();
-                            ctx.beginPath();
-                            ctx.rect(x, y, width, height);
-                            ctx.clip();
-                            ctx.filter = `blur(${currentBlur}px)`;
-                            ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
-                            ctx.restore();
-                        });
-                    });
-
-                    processedFrames++;
-                    requestAnimationFrame(processFrame);
-                }
-
-                inputVideo.currentTime = 0;
-                inputVideo.play();
-                requestAnimationFrame(processFrame);
-
-            } catch (error) {
-                statusEl.innerHTML = `❌ Processing Error: ${error.message}`;
-                isProcessing = false;
-                stopBtn.disabled = true;
-                processBtn.disabled = false;
-                console.error("Processing error:", error);
-            }
-        }
-
-        // 3. Stop Processing
-        function stopProcessing() {
-            if (isProcessing) {
-                isProcessing = false;
-                mediaRecorder.stop();
-                stopBtn.disabled = true;
-                processBtn.disabled = false;
-                statusEl.textContent = "Processing stopped!";
-            }
-        }
-
-        // 4. Save & Download
-        async function saveVideo() {
-            const blob = new Blob(chunks, { type: 'video/webm' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `blurred-video-${Date.now()}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            
-            URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            chunks = [];
-        }
-
-        // Event Listeners
+        // වීඩියෝ උඩුගත කිරීම
         videoInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
@@ -366,9 +127,82 @@
             }
         });
 
+        // මාදිලිය ආරම්භ කිරීම
+        async function initializeModel() {
+            await tf.setBackend('webgl');
+            model = await blazeface.load();
+        }
+
+        // වීඩියෝ ප්රතිචක්රීකරණය සමඟ ප්රකාරකරණය
+        async function processVideo() {
+            isProcessing = true;
+            processBtn.disabled = true;
+            
+            const ctx = outputCanvas.getContext('2d');
+            outputCanvas.width = inputVideo.videoWidth;
+            outputCanvas.height = inputVideo.videoHeight;
+
+            // මාධ්ය පටිගත කිරීම
+            const stream = outputCanvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm; codecs=vp9'
+            });
+
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = saveVideo;
+            mediaRecorder.start();
+
+            // රාමු ප්රකාරකරණ ලූපය
+            function processFrame() {
+                if (!isProcessing) return;
+
+                ctx.drawImage(inputVideo, 0, 0);
+                
+                model.estimateFaces(inputVideo).then(predictions => {
+                    predictions.forEach(prediction => {
+                        const [x, y, width, height] = [
+                            prediction.topLeft[0],
+                            prediction.topLeft[1],
+                            prediction.bottomRight[0] - prediction.topLeft[0],
+                            prediction.bottomRight[1] - prediction.topLeft[1]
+                        ];
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(x, y, width, height);
+                        ctx.clip();
+                        ctx.filter = 'blur(15px)';
+                        ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+                        ctx.restore();
+                    });
+                });
+
+                requestAnimationFrame(processFrame);
+            }
+
+            inputVideo.play();
+            processFrame();
+        }
+
+        // ගොනුව සුරැකීම
+        function saveVideo() {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `blurred-video-${Date.now()}.webm`;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+            chunks = [];
+            isProcessing = false;
+            downloadBtn.disabled = false;
+        }
+
+        // සිදුවීම් සම්බන්ධකරණය
         processBtn.addEventListener('click', processVideo);
-        stopBtn.addEventListener('click', stopProcessing);
-        window.addEventListener('load', initializeApp);
+        window.addEventListener('load', initializeModel);
     </script>
 </body>
 </html>
