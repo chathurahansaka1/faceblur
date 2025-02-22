@@ -1,135 +1,416 @@
-<!-- Replace the <script> section in your HTML with this: -->
-
-<script>
-  const videoInput = document.getElementById('videoInput');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const progress = document.getElementById('progress');
-  const faceCount = document.getElementById('faceCount');
-  const loader = document.getElementById('loader');
-  const blurStrength = document.getElementById('blurStrength');
-  const blurValue = document.getElementById('blurValue');
-  const progressBar = document.getElementById('progressBar');
-  const outputCanvas = document.createElement('canvas');
-  outputCanvas.style.display = 'none';
-  document.body.appendChild(outputCanvas);
-
-  let model;
-  let processing = false;
-  let currentBlur = 25;
-  let lastPredictions = [];
-
-  // Load Blazeface model
-  async function loadModel() {
-    loader.style.display = 'block';
-    try {
-      model = await blazeface.load({ maxFaces: 20 });
-      console.log("Blazeface model loaded successfully!");
-      loader.style.display = 'none';
-    } catch (error) {
-      console.error("Model load failed:", error);
-      alert("Error loading model. Please try again.");
-      loader.style.display = 'none';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neon Face Blur - Upload Fixed</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+  <style>
+    :root {
+      --neon-red: #ff073a;
+      --neon-red-glow: #ff073a80;
+      --background: #0d0d0d;
+      --text-color: #ffffff;
+      --shadow-glow: 0 0 15px var(--neon-red), 0 0 25px var(--neon-red);
     }
-  }
-  loadModel();
-
-  // Blur strength update
-  blurStrength.addEventListener('input', () => {
-    currentBlur = blurStrength.value;
-    blurValue.textContent = currentBlur;
-  });
-
-  // Fix upload trigger
-  videoInput.addEventListener('click', () => {
-    console.log("File input clicked!");
-  });
-
-  videoInput.addEventListener('change', async (event) => {
-    console.log("File input changed!", event.target.files);
-    if (!model) {
-      alert("Model not loaded yet!");
-      return;
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--background);
+      color: var(--text-color);
+      font-family: 'Arial', sans-serif;
+      overflow-x: hidden;
     }
-
-    const videoFile = event.target.files[0];
-    if (!videoFile) {
-      console.log("No file selected!");
-      return;
+    .container {
+      max-width: 100%;
+      margin: auto;
+      text-align: center;
+      padding: 20px;
     }
+    h1 {
+      font-size: 2.5em;
+      text-transform: uppercase;
+      color: var(--neon-red);
+      text-shadow: var(--shadow-glow);
+      letter-spacing: 2px;
+    }
+    .controls {
+      margin: 25px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+    button {
+      background: var(--neon-red);
+      color: var(--background);
+      border: none;
+      padding: 14px 30px;
+      cursor: pointer;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      box-shadow: var(--shadow-glow);
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px var(--neon-red), 0 0 30px var(--neon-red);
+    }
+    button:disabled {
+      background: #555;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+    .quality-controls {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 25px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 600px;
+      margin: 20px auto;
+      border: 1px solid var(--neon-red-glow);
+      box-shadow: inset 0 0 10px var(--neon-red-glow);
+    }
+    .slider-container {
+      margin: 20px 0;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--neon-red);
+      background: rgba(255, 7, 58, 0.2);
+      border-radius: 5px;
+    }
+    label {
+      font-size: 18px;
+      text-shadow: 0 0 5px var(--neon-red);
+    }
+    .stats {
+      margin-top: 25px;
+      font-size: 16px;
+      color: #dddddd;
+      text-shadow: 0 0 5px var(--neon-red-glow);
+    }
+    #faceCount {
+      color: var(--neon-red);
+      font-weight: bold;
+      text-shadow: var(--shadow-glow);
+    }
+    .loader {
+      display: none;
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid var(--neon-red);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+      box-shadow: var(--shadow-glow);
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .custom-file-upload {
+      display: inline-block;
+      cursor: pointer;
+      background: var(--neon-red);
+      color: var(--background);
+      padding: 14px 30px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      box-shadow: var(--shadow-glow);
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+    .custom-file-upload:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px var(--neon-red), 0 0 30px var(--neon-red);
+    }
+    .progress-bar {
+      width: 100%;
+      max-width: 700px;
+      height: 15px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      margin: 30px auto;
+      overflow: hidden;
+      border: 1px solid var(--neon-red-glow);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--neon-red);
+      width: 0%;
+      transition: width 0.4s ease;
+      box-shadow: var(--shadow-glow);
+    }
+    @media (max-width: 600px) {
+      .container {
+        padding: 15px;
+      }
+      .quality-controls {
+        width: 95%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Neon Face Blur</h1>
+    
+    <div class="quality-controls">
+      <div class="slider-container">
+        <label>Blur Strength: <span id="blurValue">25</span>px</label>
+        <input type="range" id="blurStrength" min="10" max="60" value="25" />
+      </div>
+    </div>
 
-    loader.style.display = 'block';
-    downloadBtn.disabled = true;
-    console.log("Video selected:", videoFile.name, videoFile.size);
+    <div class="controls">
+      <label for="videoInput" class="custom-file-upload">
+        Upload Video
+      </label>
+      <input type="file" id="videoInput" accept="video/*" style="display: none;" />
+      <button id="downloadBtn" disabled>Download MP4</button>
+    </div>
 
-    const videoUrl = URL.createObjectURL(videoFile);
-    const videoElement = document.createElement('video');
-    videoElement.src = videoUrl;
-    videoElement.muted = true; // Ensure muted for local files
-    videoElement.preload = 'auto'; // Preload to help with local files
+    <div class="progress-bar">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
 
-    await new Promise((resolve, reject) => {
-      videoElement.onloadedmetadata = () => {
-        console.log("Video metadata loaded:", videoElement.videoWidth, videoElement.videoHeight, videoElement.duration);
-        resolve();
-      };
-      videoElement.onerror = () => {
-        console.error("Error loading video metadata");
-        reject(new Error("Failed to load video metadata"));
-      };
-    }).catch(error => {
-      console.error("Metadata loading error:", error);
-      alert("Failed to load video. Please ensure it’s a valid video file and try again.");
-      loader.style.display = 'none';
-      return;
+    <div class="stats">
+      <div>Progress: <span id="progress">0%</span></div>
+      <div>Detected Faces: <span id="faceCount">0</span></div>
+      <div>Quality: Same as Input (with Audio)</div>
+    </div>
+
+    <div class="loader" id="loader"></div>
+  </div>
+
+  <script>
+    const videoInput = document.getElementById('videoInput');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const progress = document.getElementById('progress');
+    const faceCount = document.getElementById('faceCount');
+    const loader = document.getElementById('loader');
+    const blurStrength = document.getElementById('blurStrength');
+    const blurValue = document.getElementById('blurValue');
+    const progressBar = document.getElementById('progressBar');
+    const outputCanvas = document.createElement('canvas');
+    outputCanvas.style.display = 'none';
+    document.body.appendChild(outputCanvas);
+
+    let model;
+    let processing = false;
+    let currentBlur = 25;
+    let lastPredictions = [];
+
+    // Load Blazeface model
+    async function loadModel() {
+      loader.style.display = 'block';
+      try {
+        model = await blazeface.load({ maxFaces: 20 });
+        console.log("Blazeface model loaded successfully!");
+        loader.style.display = 'none';
+      } catch (error) {
+        console.error("Model load failed:", error);
+        alert("Error loading model. Please try again.");
+        loader.style.display = 'none';
+      }
+    }
+    loadModel();
+
+    // Blur strength update
+    blurStrength.addEventListener('input', () => {
+      currentBlur = blurStrength.value;
+      blurValue.textContent = currentBlur;
     });
 
-    const targetWidth = videoElement.videoWidth;
-    const targetHeight = videoElement.videoHeight;
-    const duration = videoElement.duration;
-    const frameRate = 30;
-    outputCanvas.width = targetWidth;
-    outputCanvas.height = targetHeight;
+    // Fix upload trigger
+    videoInput.addEventListener('click', () => {
+      console.log("File input clicked!");
+    });
 
-    const ctx = outputCanvas.getContext('2d', { alpha: false });
-    const stream = outputCanvas.captureStream(frameRate);
+    videoInput.addEventListener('change', async (event) => {
+      console.log("File input changed!", event.target.files);
+      if (!model) {
+        alert("Model not loaded yet!");
+        return;
+      }
 
-    // Add audio tracks
-    const audioTracks = videoElement.captureStream().getAudioTracks();
-    if (audioTracks.length > 0) {
-      audioTracks.forEach(track => {
-        console.log("Adding audio track:", track);
-        stream.addTrack(track);
+      const videoFile = event.target.files[0];
+      if (!videoFile) {
+        console.log("No file selected!");
+        return;
+      }
+
+      loader.style.display = 'block';
+      downloadBtn.disabled = true;
+      console.log("Video selected:", videoFile.name, videoFile.size);
+
+      const videoUrl = URL.createObjectURL(videoFile);
+      const videoElement = document.createElement('video');
+      videoElement.src = videoUrl;
+      videoElement.muted = true; // Mute to avoid playback noise
+      videoElement.preload = 'auto'; // Preload to help with local files
+
+      await new Promise((resolve, reject) => {
+        videoElement.onloadedmetadata = () => {
+          console.log("Video metadata loaded:", videoElement.videoWidth, videoElement.videoHeight, videoElement.duration);
+          resolve();
+        };
+        videoElement.onerror = () => {
+          console.error("Error loading video metadata");
+          reject(new Error("Failed to load video metadata"));
+        };
+      }).catch(error => {
+        console.error("Metadata loading error:", error);
+        alert("Failed to load video. Please ensure it’s a valid video file and try again.");
+        loader.style.display = 'none';
+        return;
       });
-    } else {
-      console.warn("No audio tracks found in input video.");
+
+      const targetWidth = videoElement.videoWidth;
+      const targetHeight = videoElement.videoHeight;
+      const duration = videoElement.duration;
+      const frameRate = 30; // Default, as exact FPS isn’t easily accessible
+      outputCanvas.width = targetWidth;
+      outputCanvas.height = targetHeight;
+
+      const ctx = outputCanvas.getContext('2d', { alpha: false });
+      const stream = outputCanvas.captureStream(frameRate);
+
+      // Add audio tracks
+      const audioTracks = videoElement.captureStream().getAudioTracks();
+      if (audioTracks.length > 0) {
+        audioTracks.forEach(track => {
+          console.log("Adding audio track:", track);
+          stream.addTrack(track);
+        });
+      } else {
+        console.warn("No audio tracks found in input video.");
+      }
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 3000000, // 3 Mbps
+        audioBitsPerSecond: 96000   // 96 kbps
+      });
+      const chunks = [];
+      recorder.ondataavailable = e => {
+        console.log("Chunk received:", e.data.size);
+        chunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        console.log("Recording stopped, total chunks:", chunks.length);
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        finalizeDownload(blob);
+        loader.style.display = 'none';
+      };
+      recorder.onerror = (e) => {
+        console.error("Recorder error:", e);
+        alert("Processing failed. Please try again.");
+        loader.style.display = 'none';
+      };
+      recorder.onstart = () => console.log("Recorder started!");
+
+      recorder.start(50);
+      videoElement.playbackRate = 2;
+      try {
+        await videoElement.play();
+        console.log("Video playback started!");
+      } catch (error) {
+        console.error("Playback failed:", error);
+        alert("Failed to play video. Please try again or use a web server.");
+        recorder.stop();
+        return;
+      }
+
+      processing = true;
+      let frameCounter = 0;
+
+      async function processFrame() {
+        if (!processing || videoElement.ended) {
+          console.log("Processing complete, stopping recorder...");
+          recorder.stop();
+          return;
+        }
+
+        ctx.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
+
+        if (frameCounter % 20 === 0) {
+          try {
+            lastPredictions = await model.estimateFaces(videoElement, false, true);
+            faceCount.textContent = lastPredictions.length;
+            console.log("Faces detected:", lastPredictions.length);
+          } catch (error) {
+            console.error("Face detection failed:", error);
+          }
+        }
+
+        lastPredictions.forEach(pred => {
+          const [x, y, width, height] = [
+            pred.topLeft[0],
+            pred.topLeft[1],
+            pred.bottomRight[0] - pred.topLeft[0],
+            pred.bottomRight[1] - pred.topLeft[1]
+          ];
+          const padding = currentBlur * 0.5;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x - padding, y - padding, width + padding * 2, height + padding * 2);
+          ctx.clip();
+          ctx.filter = `blur(${currentBlur}px)`;
+          ctx.drawImage(outputCanvas, x - padding, y - padding, 
+            width + padding * 2, height + padding * 2, 
+            x - padding, y - padding, width + padding * 2, height + padding * 2);
+          ctx.restore();
+        });
+
+        frameCounter++;
+        const progressPercent = (videoElement.currentTime / duration) * 100;
+        progress.textContent = `${progressPercent.toFixed(1)}%`;
+        progressBar.style.width = `${progressPercent}%`;
+
+        requestAnimationFrame(processFrame);
+      }
+
+      requestAnimationFrame(processFrame);
+    });
+
+    // Download handler
+    function finalizeDownload(blob) {
+      try {
+        console.log("Finalizing download, blob size:", blob.size);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `blurred-video-${Date.now()}.mp4`; // WebM named as MP4
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        downloadBtn.disabled = false;
+      } catch (error) {
+        console.error("Download failed:", error);
+        alert("Download failed. Please try again or use a web server.");
+        downloadBtn.disabled = false;
+      }
     }
 
-    const recorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=vp9,opus',
-      videoBitsPerSecond: 3000000, // 3 Mbps
-      audioBitsPerSecond: 96000   // 96 kbps
+    downloadBtn.addEventListener('click', () => {
+      // Button enabled after processing
     });
-    const chunks = [];
-    recorder.ondataavailable = e => {
-      console.log("Chunk received:", e.data.size);
-      chunks.push(e.data);
-    };
-    recorder.onstop = () => {
-      console.log("Recording stopped, total chunks:", chunks.length);
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      finalizeDownload(blob);
-      loader.style.display = 'none';
-    };
-    recorder.onerror = (e) => {
-      console.error("Recorder error:", e);
-      alert("Processing failed. Please try again.");
-      loader.style.display = 'none';
-    };
-    recorder.onstart = () => console.log("Recorder started!");
 
-    recorder.start(50);
-    videoElement.playbackRate = 2;
-    try {
-      await videoElement.play();
-      console.log("Video playback started!");
-    } catch (
+    function stopProcessing() {
+      processing = false;
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (processing) stopProcessing();
+    });
+  </script>
+</body>
+</html>
