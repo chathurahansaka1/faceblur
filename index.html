@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auto-Repeat Video Processing</title>
+    <title>High-Quality Video Blur Processor</title>
     <style>
         /* Red Neon Theme */
         :root {
@@ -153,7 +153,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>AUTO-REPEAT VIDEO PROCESSING</h1>
+        <h1>HIGH-QUALITY VIDEO BLUR PROCESSOR</h1>
         
         <div class="video-container">
             <video id="inputVideo" controls loop></video>
@@ -259,9 +259,10 @@
                     stream.addTrack(audioStream[0]);
                 }
 
+                // Use H.264 for better quality and compatibility
                 mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm; codecs=vp9',
-                    videoBitsPerSecond: 5000000
+                    mimeType: 'video/mp4; codecs=avc1',
+                    videoBitsPerSecond: 5000000 // Adjust for higher quality
                 });
 
                 mediaRecorder.ondataavailable = e => chunks.push(e.data);
@@ -342,12 +343,12 @@
 
         // 4. Save & Download
         async function saveVideo() {
-            const blob = new Blob(chunks, { type: 'video/webm' });
+            const blob = new Blob(chunks, { type: 'video/mp4' });
             const url = URL.createObjectURL(blob);
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = `blurred-video-${Date.now()}.webm`;
+            a.download = `blurred-video-${Date.now()}.mp4`;
             document.body.appendChild(a);
             a.click();
             
