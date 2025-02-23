@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>High-Quality Video Blur Processor</title>
     <style>
-        /* Red Neon Theme */
         :root {
             --neon-red: #ff004c;
             --neon-pink: #ff00ff;
@@ -56,16 +55,48 @@
             border-radius: 15px;
             overflow: hidden;
             box-shadow: 0 0 20px var(--neon-red);
+            aspect-ratio: 16 / 9; /* Maintain consistent video aspect ratio */
+        }
+
+        #uploadPlaceholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        #uploadPlaceholder img {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+        }
+
+        #uploadPlaceholder p {
+            font-size: 1.2rem;
+            color: var(--neon-red);
         }
 
         #inputVideo, #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            display: block;
+            height: 100%;
+            display: none;
+            object-fit: cover; /* Ensure video fills container */
         }
 
         .controls {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
             margin: 2rem 0;
         }
@@ -73,7 +104,7 @@
         .btn {
             background: linear-gradient(45deg, var(--neon-red), var(--neon-pink));
             color: white;
-            padding: 12px 25px;
+            padding: 12px 20px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
@@ -86,7 +117,7 @@
             gap: 8px;
         }
 
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 0 15px var(--neon-red);
         }
@@ -146,8 +177,7 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -156,6 +186,10 @@
         <h1>HIGH-QUALITY VIDEO BLUR PROCESSOR</h1>
         
         <div class="video-container">
+            <div id="uploadPlaceholder" onclick="document.getElementById('videoInput').click()">
+                <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBkPSJNMTI4IDUxMmgtOTZBLTY0IDY0IDAgMCAxIDAgNDQ4VjY0YzAgLTM1LjMgMjguNy02NCA2NC02NGgzMjBjMzUuMyAwIDY0IDI4LjcgNjQgNjR2Mzg0YzAgMzUuMy0yOC43IDY0LTY0IDY0aC0zMjB2LTY0aDM4NHYtMjI4aC04NHYtNjRjMC0xNy43IDE0LjMtMzIgMzItMzJoMjU2YzE3LjcgMCAzMiAxNC4zIDMyIDMydjY0aC04NHYyMjhoLTY0di0yMjhoLTg0di02NGMwLTE3LjcgMTQuMy0zMiAzMi0zMmg4NHYtNjRhOTYgOTYgMCAwIDAtOTYtOTZIMTY4Yy01MyAwLTk2IDQzLTk2IDk2djY0aDg0djIyOGgtNjR2NjR6IiBmaWxsPSIjZmYwMDQ4Ii8+PC9zdmc+" alt="Upload Video">
+                <p>Click to upload video</p>
+            </div>
             <video id="inputVideo" controls loop></video>
             <canvas id="outputCanvas"></canvas>
         </div>
@@ -165,15 +199,10 @@
             <button class="btn" onclick="document.getElementById('videoInput').click()">
                 📁 Upload Video
             </button>
-            <button class="btn" id="processBtn" disabled>
-                ⚡ Process Video
-            </button>
-            <button class="btn" id="stopBtn" disabled>
-                ⛔ Stop Processing
-            </button>
-            <button class="btn" id="downloadBtn" disabled>
-                💾 Download
-            </button>
+            <button class="btn" id="previewBtn" disabled>👁️ Preview Blur</button>
+            <button class="btn" id="processBtn" disabled>⚡ Process Video</button>
+            <button class="btn" id="stopBtn" disabled>⛔ Stop Processing</button>
+            <button class="btn" id="downloadBtn" disabled>💾 Download</button>
         </div>
 
         <div class="slider-container">
@@ -188,7 +217,6 @@
         <div class="status" id="status"></div>
     </div>
 
-    <!-- TensorFlow.js and Blazeface -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
 
@@ -196,8 +224,10 @@
         const videoInput = document.getElementById('videoInput');
         const inputVideo = document.getElementById('inputVideo');
         const outputCanvas = document.getElementById('outputCanvas');
+        const uploadPlaceholder = document.getElementById('uploadPlaceholder');
         const processBtn = document.getElementById('processBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const previewBtn = document.getElementById('previewBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const statusEl = document.getElementById('status');
         const progressBar = document.querySelector('.progress-bar');
@@ -208,165 +238,208 @@
         let mediaRecorder;
         let chunks = [];
         let isProcessing = false;
+        let isPreviewing = false;
         let currentBlur = 15;
+        let processedVideoUrl = null;
+        let processingCompleted = false;
 
-        // Update blur intensity
-        blurIntensity.addEventListener('input', () => {
-            currentBlur = blurIntensity.value;
-            blurValue.textContent = currentBlur;
-        });
-
-        // 1. Model Loading with Error Handling
+        // Initialize the app
         async function initializeApp() {
+            statusEl.innerHTML = `<div class="loading"></div> Loading AI Model...`;
             try {
-                statusEl.innerHTML = `<div class="loading"></div> Loading AI Model...`;
-                
-                // Initialize TensorFlow.js
                 await tf.setBackend('webgl');
                 await tf.ready();
-                
-                // Load Blazeface Model
                 model = await blazeface.load({
                     maxFaces: 10,
                     detectionConfidence: 0.8
                 });
-                
                 statusEl.textContent = "Ready to process videos!";
-                processBtn.disabled = false;
             } catch (error) {
-                statusEl.innerHTML = `❌ Error: ${error.message}<br>Please refresh the page or check your internet connection.`;
+                statusEl.innerHTML = `❌ Error: ${error.message}<br>Refresh the page.`;
                 console.error("Initialization error:", error);
             }
         }
 
-        // 2. Video Processing Core
+        // Handle video upload
+        videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                inputVideo.src = url;
+                inputVideo.style.display = 'block';
+                uploadPlaceholder.style.display = 'none';
+                outputCanvas.style.display = 'none';
+                processBtn.disabled = false;
+                previewBtn.disabled = false;
+                downloadBtn.disabled = true;
+                isPreviewing = false;
+                processingCompleted = false;
+                statusEl.textContent = "Video uploaded!";
+            }
+        });
+
+        // Set canvas dimensions when video metadata is loaded
+        inputVideo.addEventListener('loadedmetadata', () => {
+            outputCanvas.width = inputVideo.videoWidth;
+            outputCanvas.height = inputVideo.videoHeight;
+        });
+
+        // Preview blur toggle
+        previewBtn.addEventListener('click', async () => {
+            if (!isPreviewing) {
+                inputVideo.pause();
+                outputCanvas.style.display = 'block';
+                inputVideo.style.display = 'none';
+                isPreviewing = true;
+                previewBtn.textContent = 'Exit Preview';
+                await applyBlurToFrameAsync();
+            } else {
+                outputCanvas.style.display = 'none';
+                inputVideo.style.display = 'block';
+                isPreviewing = false;
+                previewBtn.textContent = '👁️ Preview Blur';
+            }
+        });
+
+        // Update blur intensity and refresh preview
+        blurIntensity.addEventListener('input', async () => {
+            currentBlur = blurIntensity.value;
+            blurValue.textContent = currentBlur;
+            if (isPreviewing) {
+                await applyBlurToFrameAsync();
+            }
+        });
+
+        // Apply blur to a single frame (for preview)
+        async function applyBlurToFrameAsync() {
+            const ctx = outputCanvas.getContext('2d');
+            ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+            const predictions = await model.estimateFaces(inputVideo);
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = [
+                    prediction.topLeft[0],
+                    prediction.topLeft[1],
+                    prediction.bottomRight[0] - prediction.topLeft[0],
+                    prediction.bottomRight[1] - prediction.topLeft[1]
+                ];
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(x, y, width, height);
+                ctx.clip();
+                ctx.filter = `blur(${currentBlur}px)`;
+                ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+                ctx.restore();
+            });
+        }
+
+        // Process the video
         async function processVideo() {
             if (isProcessing) return;
             isProcessing = true;
+            processingCompleted = false;
             stopBtn.disabled = false;
             processBtn.disabled = true;
-            
-            try {
-                // Setup Canvas
-                outputCanvas.width = inputVideo.videoWidth;
-                outputCanvas.height = inputVideo.videoHeight;
-                const ctx = outputCanvas.getContext('2d');
-                
-                // Initialize MediaRecorder with Audio
-                const stream = outputCanvas.captureStream(30);
-                const audioStream = inputVideo.captureStream().getAudioTracks();
-                if (audioStream.length > 0) {
-                    stream.addTrack(audioStream[0]);
-                }
+            previewBtn.disabled = true;
+            isPreviewing = false;
+            outputCanvas.style.display = 'block';
+            inputVideo.style.display = 'none';
 
-                // Use H.264 for better quality and compatibility
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'video/mp4; codecs=avc1',
-                    videoBitsPerSecond: 5000000 // Adjust for higher quality
+            const ctx = outputCanvas.getContext('2d');
+            const stream = outputCanvas.captureStream(30);
+            const audioStream = inputVideo.captureStream().getAudioTracks();
+            if (audioStream.length > 0) {
+                stream.addTrack(audioStream[0]);
+            }
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/mp4; codecs=avc1',
+                videoBitsPerSecond: 5000000
+            });
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = saveVideo;
+            mediaRecorder.start();
+
+            inputVideo.currentTime = 0;
+            inputVideo.play();
+
+            function processFrame() {
+                if (!isProcessing) return;
+
+                const progress = (inputVideo.currentTime / inputVideo.duration) * 100;
+                progressBar.style.width = `${progress}%`;
+                statusEl.textContent = `Processing: ${progress.toFixed(1)}%`;
+
+                ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
+                model.estimateFaces(inputVideo).then(predictions => {
+                    predictions.forEach(prediction => {
+                        const [x, y, width, height] = [
+                            prediction.topLeft[0],
+                            prediction.topLeft[1],
+                            prediction.bottomRight[0] - prediction.topLeft[0],
+                            prediction.bottomRight[1] - prediction.topLeft[1]
+                        ];
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(x, y, width, height);
+                        ctx.clip();
+                        ctx.filter = `blur(${currentBlur}px)`;
+                        ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
+                        ctx.restore();
+                    });
                 });
 
-                mediaRecorder.ondataavailable = e => chunks.push(e.data);
-                mediaRecorder.onstop = saveVideo;
-                mediaRecorder.start();
-
-                // Frame Processing
-                let lastTime = 0;
-                const totalFrames = Math.floor(inputVideo.duration * 30);
-                let processedFrames = 0;
-
-                function processFrame(timestamp) {
-                    if (!isProcessing) return;
-
-                    const progress = (processedFrames / totalFrames) * 100;
-                    progressBar.style.width = `${progress}%`;
-                    statusEl.textContent = `Processing: ${progress.toFixed(1)}%`;
-
-                    if (processedFrames >= totalFrames) {
-                        mediaRecorder.stop();
-                        isProcessing = false;
-                        stopBtn.disabled = true;
-                        downloadBtn.disabled = false;
-                        statusEl.textContent = "Processing complete! ✅";
-                        return;
-                    }
-
-                    ctx.drawImage(inputVideo, 0, 0, outputCanvas.width, outputCanvas.height);
-                    
-                    // Face Detection
-                    model.estimateFaces(inputVideo).then(predictions => {
-                        predictions.forEach(prediction => {
-                            const [x, y, width, height] = [
-                                prediction.topLeft[0],
-                                prediction.topLeft[1],
-                                prediction.bottomRight[0] - prediction.topLeft[0],
-                                prediction.bottomRight[1] - prediction.topLeft[1]
-                            ];
-
-                            // Apply Blur Effect
-                            ctx.save();
-                            ctx.beginPath();
-                            ctx.rect(x, y, width, height);
-                            ctx.clip();
-                            ctx.filter = `blur(${currentBlur}px)`;
-                            ctx.drawImage(outputCanvas, x, y, width, height, x, y, width, height);
-                            ctx.restore();
-                        });
-                    });
-
-                    processedFrames++;
+                if (inputVideo.currentTime >= inputVideo.duration - 0.1) { // Small buffer
+                    processingCompleted = true;
+                    mediaRecorder.stop();
+                    isProcessing = false;
+                    stopBtn.disabled = true;
+                    statusEl.textContent = "Processing complete! ✅";
+                } else {
                     requestAnimationFrame(processFrame);
                 }
-
-                inputVideo.currentTime = 0;
-                inputVideo.play();
-                requestAnimationFrame(processFrame);
-
-            } catch (error) {
-                statusEl.innerHTML = `❌ Processing Error: ${error.message}`;
-                isProcessing = false;
-                stopBtn.disabled = true;
-                processBtn.disabled = false;
-                console.error("Processing error:", error);
             }
+
+            requestAnimationFrame(processFrame);
         }
 
-        // 3. Stop Processing
+        // Stop processing
         function stopProcessing() {
             if (isProcessing) {
                 isProcessing = false;
                 mediaRecorder.stop();
                 stopBtn.disabled = true;
                 processBtn.disabled = false;
+                previewBtn.disabled = false;
+                outputCanvas.style.display = 'none';
+                inputVideo.style.display = 'block';
                 statusEl.textContent = "Processing stopped!";
             }
         }
 
-        // 4. Save & Download
-        async function saveVideo() {
+        // Save and handle processed video
+        function saveVideo() {
             const blob = new Blob(chunks, { type: 'video/mp4' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `blurred-video-${Date.now()}.mp4`;
-            document.body.appendChild(a);
-            a.click();
-            
-            URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+            if (processingCompleted) {
+                processedVideoUrl = URL.createObjectURL(blob);
+                inputVideo.src = processedVideoUrl;
+                inputVideo.style.display = 'block';
+                outputCanvas.style.display = 'none';
+                downloadBtn.disabled = false;
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = processedVideoUrl;
+                    a.download = `blurred-video-${Date.now()}.mp4`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+                statusEl.textContent = "Ready to play or download!";
+            } else {
+                statusEl.textContent = "Processing stopped. Partial video not saved.";
+            }
             chunks = [];
         }
 
-        // Event Listeners
-        videoInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                inputVideo.src = URL.createObjectURL(file);
-                inputVideo.style.display = 'block';
-                processBtn.disabled = false;
-            }
-        });
-
+        // Event listeners
         processBtn.addEventListener('click', processVideo);
         stopBtn.addEventListener('click', stopProcessing);
         window.addEventListener('load', initializeApp);
